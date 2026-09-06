@@ -138,6 +138,10 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminForm, setAdminForm] = useState(emptyAdminForm);
+  const [backupFile, setBackupFile] = useState(null);
+  const [restoreConfirmation, setRestoreConfirmation] = useState("");
+  const [restoreStatus, setRestoreStatus] = useState(null);
+  const [backupProgress, setBackupProgress] = useState(null);
   const [health, setHealth] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -186,6 +190,8 @@ export default function App() {
     conversations: false,
     auth: false,
     admins: false,
+    backupDownload: false,
+    backupRestore: false,
   });
 
   const selectedCompany = useMemo(
@@ -198,6 +204,7 @@ export default function App() {
         { id: "dashboard", label: "Dashboard", icon: Activity },
         { id: "companies", label: "Company Management", icon: Building2 },
         { id: "admins", label: "Admin Management", icon: Users },
+        { id: "backups", label: "Backup & Restore", icon: Download },
       ]
     : [
         { id: "dashboard", label: "Dashboard", icon: Activity },
@@ -229,6 +236,24 @@ export default function App() {
     }
     return Array.from(groups.entries());
   }, [adminUsers]);
+
+  useEffect(() => {
+    if (!isSuperAdmin || activeSection !== "backups") return undefined;
+    let cancelled = false;
+    const refresh = () => {
+      api.backups.status()
+        .then((status) => {
+          if (!cancelled) setRestoreStatus(status);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeSection, isSuperAdmin]);
 
   async function runTask(key, task, successMessage = "") {
     console.log("[task] start", key);
@@ -1346,6 +1371,69 @@ ${widgetScriptSrc()}`;
     if (result) await loadAdminUsers();
   }
 
+  async function handleBackupDownload() {
+    const suggestedName = `rag-system-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+    setBackupProgress({ bytes: 0, stage: "Preparing server snapshot..." });
+    if (window.showSaveFilePicker) {
+      let fileHandle;
+      try {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName,
+          types: [{ description: "RAG System backup", accept: { "application/zip": [".zip"] } }],
+        });
+      } catch (error) {
+        setBackupProgress(null);
+        if (error.name === "AbortError") return;
+        setError(error.message || "Could not choose a backup location");
+        return;
+      }
+      const bytes = await runTask("backupDownload", () =>
+        api.backups.downloadToFile(fileHandle, (received) =>
+          setBackupProgress({ bytes: received, stage: "Downloading directly to disk" })
+        )
+      );
+      setBackupProgress(null);
+      if (bytes !== null && bytes !== undefined) setNotice("Full backup downloaded");
+      return;
+    }
+
+    const blob = await runTask("backupDownload", () => api.backups.download());
+    setBackupProgress(null);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = suggestedName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice("Full backup downloaded");
+  }
+
+  async function handleBackupRestore(event) {
+    event.preventDefault();
+    if (!backupFile) {
+      setError("Choose a backup ZIP first");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Restore this backup? Current database records and uploaded PDFs will be replaced. Do not close this page while indexes rebuild."
+    );
+    if (!confirmed) return;
+    const result = await runTask(
+      "backupRestore",
+      () => api.backups.restore(backupFile, restoreConfirmation),
+      "Backup and existing index restored"
+    );
+    if (result) {
+      setBackupFile(null);
+      setRestoreConfirmation("");
+      setNotice(result.message);
+      window.setTimeout(() => window.location.reload(), 2500);
+    }
+  }
+
   if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f5f7fb] text-slate-600">
@@ -1677,7 +1765,10 @@ ${widgetScriptSrc()}`;
             </div>
           )}
 
-          {isSuperAdmin && !selectedCompany && activeSection !== "admins" ? (
+          {isSuperAdmin &&
+          !selectedCompany &&
+          activeSection !== "admins" &&
+          activeSection !== "backups" ? (
             <>
               {activeSection === "dashboard" && (
                 <section className="grid gap-4 md:grid-cols-3">
@@ -1787,7 +1878,8 @@ ${widgetScriptSrc()}`;
                 </section>
               )}
             </>
-          ) : !selectedCompany && !(isSuperAdmin && activeSection === "admins") ? (
+          ) : !selectedCompany &&
+            !(isSuperAdmin && ["admins", "backups"].includes(activeSection)) ? (
             <div className="p-10 text-center bg-white border rounded border-slate-200">
               <Building2 className="mx-auto mb-3 text-slate-400" size={34} />
               <h2 className="text-lg font-semibold text-slate-950">Select or create a company</h2>
@@ -2539,6 +2631,100 @@ ${widgetScriptSrc()}`;
                 </section>
               )}
 
+              {isSuperAdmin && activeSection === "backups" && (
+                <section className="grid gap-5 xl:grid-cols-2">
+                  {restoreStatus && restoreStatus.status !== "idle" && (
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-950">Latest restore</div>
+                          <div className="mt-1 text-sm text-slate-500">
+                            {restoreStatus.status === "completed" && "Database, PDFs, chunks, and embeddings were restored directly."}
+                            {restoreStatus.status === "failed" && (restoreStatus.error || "Index rebuild failed.")}
+                          </div>
+                        </div>
+                        <StatusBadge status={restoreStatus.status} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white">
+                        <Download size={20} />
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-slate-950">Download full backup</h2>
+                        <p className="text-sm text-slate-500">MongoDB, PDFs, and a compact copy of active chunks and embeddings.</p>
+                      </div>
+                    </div>
+                    <p className="mt-5 text-sm leading-6 text-slate-600">
+                      Keep this ZIP private. It contains admin accounts, company configuration,
+                      integration records, chat history, and source documents. Unused Chroma space
+                      from deleted documents is excluded automatically without reindexing.
+                    </p>
+                    <PrimaryButton
+                      className="mt-5"
+                      onClick={handleBackupDownload}
+                      disabled={loading.backupDownload || loading.backupRestore}
+                    >
+                      {loading.backupDownload ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                      {loading.backupDownload ? "Preparing backup..." : "Download backup ZIP"}
+                    </PrimaryButton>
+                    {backupProgress && (
+                      <div className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-600" role="status">
+                        <div className="font-semibold text-slate-800">{backupProgress.stage}</div>
+                        <div className="mt-1 tabular-nums">
+                          {(backupProgress.bytes / 1024 / 1024).toFixed(1)} MB received
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-rose-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-rose-600 text-white">
+                        <Upload size={20} />
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-slate-950">Restore on this server</h2>
+                        <p className="text-sm text-slate-500">Restore all data and the existing Chroma index directly.</p>
+                      </div>
+                    </div>
+                    <form className="mt-5 space-y-4" onSubmit={handleBackupRestore}>
+                      <Field label="Backup ZIP">
+                        <input
+                          type="file"
+                          accept=".zip,application/zip"
+                          onChange={(event) => setBackupFile(event.target.files?.[0] || null)}
+                          disabled={loading.backupRestore}
+                          className="block w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
+                        />
+                      </Field>
+                      <Field label="Type RESTORE to confirm">
+                        <TextInput
+                          value={restoreConfirmation}
+                          onChange={(event) => setRestoreConfirmation(event.target.value)}
+                          placeholder="RESTORE"
+                          autoComplete="off"
+                          disabled={loading.backupRestore}
+                        />
+                      </Field>
+                      <p className="rounded-md bg-rose-50 p-3 text-sm leading-5 text-rose-700">
+                        This replaces the current database, PDFs, chunks, and embeddings. No reindexing is performed.
+                      </p>
+                      <PrimaryButton
+                        type="submit"
+                        className="bg-rose-600 hover:bg-rose-700"
+                        disabled={loading.backupRestore || loading.backupDownload || restoreConfirmation !== "RESTORE" || !backupFile}
+                      >
+                        {loading.backupRestore ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                        {loading.backupRestore ? "Restoring backup..." : "Upload and restore"}
+                      </PrimaryButton>
+                    </form>
+                  </div>
+                </section>
+              )}
+
               {(activeSection === "documents" || activeSection === "chat") && (
               <div className={classNames(
                 "grid gap-4",
@@ -2746,7 +2932,7 @@ ${widgetScriptSrc()}`;
                                       ? "bg-emerald-100 text-emerald-700"
                                       : "bg-slate-100 text-slate-500"
                                   )}>
-                                    {document.isActive ? "active" : "superseded"}
+                                  {document.isActive ? "active" : "inactive"}
                                   </span>
                                 </div>
                               </td>

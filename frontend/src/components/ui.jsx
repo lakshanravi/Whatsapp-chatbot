@@ -4,6 +4,8 @@ export function StatusBadge({ status }) {
   const styles = {
     indexed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     indexing: "bg-amber-50 text-amber-700 ring-amber-200",
+    rebuilding: "bg-amber-50 text-amber-700 ring-amber-200",
+    completed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     failed: "bg-rose-50 text-rose-700 ring-rose-200",
     ok: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     connected: "bg-emerald-50 text-emerald-700 ring-emerald-200",

@@ -60,6 +60,35 @@ async function download(path) {
   return response.blob();
 }
 
+async function downloadToFile(path, fileHandle, onProgress) {
+  const headers = new Headers();
+  if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers, cache: "no-store" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error || data?.detail || "Download failed");
+  }
+  if (!response.body) throw new Error("Streaming downloads are not supported by this browser");
+
+  const writable = await fileHandle.createWritable();
+  const reader = response.body.getReader();
+  let received = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      await writable.write(value);
+      received += value.byteLength;
+      onProgress?.(received);
+    }
+    await writable.close();
+  } catch (error) {
+    await writable.abort().catch(() => {});
+    throw error;
+  }
+  return received;
+}
+
 export const api = {
   baseUrl: API_BASE_URL,
   health: () => request("/health"),
@@ -87,6 +116,18 @@ export const api = {
         body: JSON.stringify(payload),
       }),
     remove: (id) => request(`/api/admin-users/${id}`, { method: "DELETE" }),
+  },
+  backups: {
+    download: () => download("/api/backups/download"),
+    downloadToFile: (fileHandle, onProgress) =>
+      downloadToFile("/api/backups/download", fileHandle, onProgress),
+    status: () => request("/api/backups/restore-status", { cache: "no-store" }),
+    restore: (file, confirmation) => {
+      const formData = new FormData();
+      formData.append("backup", file);
+      formData.append("confirm", confirmation);
+      return request("/api/backups/restore", { method: "POST", body: formData });
+    },
   },
   companies: {
     list: () => request("/api/companies"),

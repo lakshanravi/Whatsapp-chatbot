@@ -200,7 +200,21 @@ GET /health
 
 ### Backups
 
-Back up:
+Superadmins can open **Backup & Restore** in the admin console to download one
+portable ZIP containing MongoDB collections and uploaded PDFs. On a new server,
+upload that ZIP on the same page, type `RESTORE`, and confirm. The restore replaces
+the current application records and PDFs, adjusts document paths for the new host,
+The download first copies only live Chroma records and their stored embeddings into
+a compact snapshot, excluding physical space retained after deletions. This does not
+process PDFs or call the embeddings API. Restore uses that saved ChromaDB index directly. The RAG service
+briefly restarts to reopen the restored index; PDFs are not reindexed.
+
+Keep the ZIP encrypted and access-controlled because it contains admin accounts,
+customer conversations, integration configuration, and source documents. Environment
+variables are not included; configure the new server separately and reuse the same
+integration encryption keys if encrypted provider tokens must remain readable.
+
+For infrastructure-managed backups, back up:
 
 - MongoDB database.
 - Uploaded PDF storage.

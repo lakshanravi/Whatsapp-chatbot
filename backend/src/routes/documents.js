@@ -160,14 +160,6 @@ async function createAndIndexDocument(
   }
 
   const normalizedKey = documentKey(originalName);
-  const previousVersion = normalizedKey
-    ? await Document.findOne({ companyId: company._id, documentKey: normalizedKey })
-      .sort({ createdAt: -1 })
-    : null;
-  const previousVersionNumber = Number(previousVersion?.documentVersion);
-  const inferredVersion = Number.isFinite(previousVersionNumber)
-    ? String(previousVersionNumber + 1)
-    : "1";
   const doc = await Document.create({
     companyId: company._id,
     originalName,
@@ -178,7 +170,7 @@ async function createAndIndexDocument(
     contentHash,
     documentKey: normalizedKey,
     status: "indexing",
-    documentVersion: metadata.documentVersion || inferredVersion,
+    documentVersion: metadata.documentVersion || "1",
     effectiveDate: metadata.effectiveDate || null,
     isActive: metadata.isActive !== false && metadata.isActive !== "false",
   });
@@ -197,28 +189,6 @@ async function createAndIndexDocument(
     doc.status = "indexed";
     doc.chunksIndexed = result.chunks_indexed;
     await doc.save();
-
-    if (doc.isActive && normalizedKey) {
-      const superseded = await Document.find({
-        companyId: company._id,
-        documentKey: normalizedKey,
-        _id: { $ne: doc._id },
-        isActive: true,
-      });
-      for (const oldDocument of superseded) {
-        try {
-          await ragClient.setDocumentActive({
-            companyId: company._id.toString(),
-            documentId: oldDocument._id.toString(),
-            isActive: false,
-          });
-          oldDocument.isActive = false;
-          await oldDocument.save();
-        } catch (activeErr) {
-          console.warn(`Unable to deactivate old vectors for ${oldDocument._id}:`, activeErr.message);
-        }
-      }
-    }
 
     return { ok: true, document: doc };
   } catch (indexErr) {
@@ -464,24 +434,6 @@ router.patch("/:documentId/active", async (req, res) => {
       return res.status(409).json({ error: "An exact duplicate cannot be activated" });
     }
     doc.documentKey = doc.documentKey || documentKey(doc.originalName);
-
-    if (req.body.isActive && doc.documentKey) {
-      const related = await Document.find({
-        companyId: req.params.companyId,
-        documentKey: doc.documentKey,
-        _id: { $ne: doc._id },
-        isActive: true,
-      });
-      for (const other of related) {
-        await ragClient.setDocumentActive({
-          companyId: req.params.companyId,
-          documentId: other._id.toString(),
-          isActive: false,
-        });
-        other.isActive = false;
-        await other.save();
-      }
-    }
 
     await ragClient.setDocumentActive({
       companyId: req.params.companyId,

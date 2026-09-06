@@ -18,6 +18,7 @@ const whatsappIntegrationsRouter = require("./routes/whatsappIntegrations");
 const smsIntegrationsRouter = require("./routes/smsIntegrations");
 const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
 const smsRoutes = require("./modules/sms/sms.routes");
+const backupsRouter = require("./routes/backups");
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.get("/health", async (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/admin-users", requireAuth, adminUsersRouter);
+app.use("/api/backups", requireAuth, backupsRouter);
 app.use("/api/companies", requireAuth, companiesRouter);
 app.use("/api/companies/:companyId/documents", requireAuth, documentsRouter);
 app.use("/api/companies/:companyId/chat", requireAuth, chatRouter);
@@ -62,6 +64,9 @@ app.use((err, _req, res, _next) => {
     return res.status(400).json({ error: err.message });
   }
   if (err.message === "Only PDF files are allowed") {
+    return res.status(400).json({ error: err.message });
+  }
+  if (err.message === "Only .zip backup files are allowed") {
     return res.status(400).json({ error: err.message });
   }
   res.status(500).json({ error: err.message || "Internal server error" });

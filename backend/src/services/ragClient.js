@@ -1,5 +1,7 @@
 const axios = require("axios");
 const crypto = require("crypto");
+const fs = require("fs");
+const { pipeline } = require("stream/promises");
 const config = require("../config");
 
 const client = axios.create({
@@ -244,6 +246,42 @@ async function checkHealth() {
   return data;
 }
 
+async function downloadIndexBackup(filePath) {
+  const response = await client.get("/index-backup", {
+    responseType: "stream",
+    timeout: 0,
+  });
+  await pipeline(response.data, fs.createWriteStream(filePath));
+}
+
+async function restoreIndexBackup(filePath) {
+  const size = fs.statSync(filePath).size;
+  await client.post("/index-restore", fs.createReadStream(filePath), {
+    headers: {
+      "Content-Type": "application/zip",
+      "Content-Length": size,
+    },
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+    timeout: 0,
+  });
+
+  // The RAG process replaces itself after acknowledging the upload so all
+  // Chroma file handles reopen against the restored index.
+  await wait(1500);
+  let lastError;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      await checkHealth();
+      return;
+    } catch (error) {
+      lastError = error;
+      await wait(1000);
+    }
+  }
+  throw new Error(`RAG service did not restart after index restore: ${lastError?.message || "unknown error"}`);
+}
+
 module.exports = {
   ingestDocument,
   deleteDocumentVectors,
@@ -252,5 +290,7 @@ module.exports = {
   buildConversationRagContext,
   updateConversationRagContext,
   checkHealth,
+  downloadIndexBackup,
+  restoreIndexBackup,
   invalidateCompanyCache,
 };

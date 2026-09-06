@@ -435,6 +435,8 @@ sms:<customerPhoneNumber>
 | `GET` | `/api/companies/:id/documents` | List documents |
 | `DELETE` | `/api/companies/:id/documents/:docId` | Delete PDF and vectors |
 | `POST` | `/api/companies/:id/documents/:docId/reindex` | Re-index PDF |
+| `GET` | `/api/backups/download` | Download a portable full-system backup ZIP (superadmin) |
+| `POST` | `/api/backups/restore` | Restore a backup ZIP and rebuild indexes (superadmin) |
 | `POST` | `/api/companies/:id/chat` | Ask question from admin/API |
 | `GET` | `/api/companies/:id/chat/conversations` | List conversations |
 | `GET` | `/api/companies/:id/chat/history/:sessionId` | Full conversation |
@@ -470,6 +472,7 @@ sms:<customerPhoneNumber>
 - All RAG queries include `company_id`.
 - Company A cannot access Company B documents or conversations.
 - Uploaded PDFs are stored under `backend/uploads/{companyId}/`.
+- Duplicate detection uses the PDF content hash. Different PDFs remain active even when their filenames are the same or similar; activation never deactivates a filename match automatically.
 - WhatsApp integrations are matched by Meta `phone_number_id`.
 - SMS integrations are matched by Twilio `To` phone number.
 - Web widget history is matched by `companyId + sessionId`.
