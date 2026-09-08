@@ -39,6 +39,29 @@ class ClarificationGuardrailTests(unittest.TestCase):
             "Which controller is best for my off-grid system?"
         ))
 
+    def test_diverse_support_question_forms_retrieve_before_clarifying(self):
+        questions = [
+            "Why is my SmartSolar 75/10 not turning on until the sun is high?",
+            "Can I wire two panels in series?",
+            "Will that fry the controller in cold weather?",
+            "How do I configure the battery preset?",
+            "What happens during PV overcurrent?",
+        ]
+        for question in questions:
+            with self.subTest(question=question):
+                self.assertTrue(RAGEngine._is_clear_factual_question(question))
+
+    def test_multi_part_question_has_multiple_answer_modes(self):
+        modes = RAGEngine._answer_modes(
+            "Can I wire two panels in series, will it fry the controller, "
+            "and why are there no load terminals?"
+        )
+
+        self.assertIn("compatibility", modes)
+        self.assertIn("safety_limits", modes)
+        self.assertIn("troubleshooting_causes", modes)
+        self.assertIn("behavior", modes)
+
     def test_question_payload_is_removed(self):
         options = RAGEngine._sanitize_clarification_options(
             "What will you use the product for?",

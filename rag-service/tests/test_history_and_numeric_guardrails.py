@@ -138,6 +138,11 @@ class HistoryAndNumericGuardrailTests(unittest.TestCase):
             "What safety rule applies to the PV array voltage?"
         ))
 
+    def test_short_technical_fact_reply_keeps_previous_topic(self):
+        self.assertTrue(RAGEngine._question_requires_history(
+            "I have a 12V battery and the solar panel is clean."
+        ))
+
     def test_model_list_question_is_detected(self):
         self.assertTrue(RAGEngine._is_model_list_question(
             "What SunSaver models are available?"
@@ -190,6 +195,17 @@ class HistoryAndNumericGuardrailTests(unittest.TestCase):
         )
 
         self.assertEqual(unsupported, ["SS30L24V"])
+
+    def test_model_explicitly_supplied_by_user_is_allowed_in_answer(self):
+        retrieved = [{"content": "PV voltage must exceed battery voltage."}]
+
+        unsupported = RAGEngine._unsupported_model_ids(
+            "For your SmartSolar 75/10, check PV voltage [Source 1].",
+            retrieved,
+            allowed_model_ids={"7510"},
+        )
+
+        self.assertEqual(unsupported, [])
 
     def test_uncited_numeric_value_is_rejected(self):
         retrieved = [{"content": "The fuse rating is 450 A."}]
@@ -279,6 +295,31 @@ class HistoryAndNumericGuardrailTests(unittest.TestCase):
 
         self.assertIn((">=", "3", "v"), claims)
         self.assertIn(("", "213", "mm"), claims)
+
+    def test_only_sentence_with_unsupported_number_is_removed(self):
+        answer = (
+            "Check the PV wiring first [Source 1]. "
+            "The controller starts at 9 V [Source 1]. "
+            "Also inspect the connectors [Source 2]."
+        )
+
+        cleaned = RAGEngine._remove_unsupported_numeric_sentences(
+            answer, [("", "9", "v")]
+        )
+
+        self.assertIn("Check the PV wiring", cleaned)
+        self.assertNotIn("9 V", cleaned)
+        self.assertIn("inspect the connectors", cleaned)
+
+    def test_numeric_removal_does_not_leave_an_empty_numbered_item(self):
+        answer = "9. Supported check [Source 1].\n10. Unsupported value is 99 V [Source 1]."
+
+        cleaned = RAGEngine._remove_unsupported_numeric_sentences(
+            answer, [("", "99", "v")]
+        )
+
+        self.assertIn("Supported check", cleaned)
+        self.assertNotIn("10.", cleaned)
 
 
 if __name__ == "__main__":

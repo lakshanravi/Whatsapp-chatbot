@@ -74,16 +74,10 @@ class ChromaStore:
                 persisted.update(deserialize_model_ids(
                     metadata.get("document_model_ids", "")
                 ))
-            if persisted:
-                catalogs[document_id] = persisted
-                continue
 
             filename_ids = extract_model_ids(
                 document_pairs[0][1].get("document_name", "")
             )
-            if filename_ids:
-                catalogs[document_id] = filename_ids
-                continue
 
             # Legacy indexes do not have document_model_ids. Models shown in
             # the first three pages or repeated on multiple pages are treated
@@ -103,11 +97,15 @@ class ChromaStore:
                 page_key = page_number if page_number is not None else metadata.get("chunk_index")
                 for model_id in model_ids:
                     pages_by_model[model_id].add(page_key)
-            catalogs[document_id] = early_ids | {
+            inferred = early_ids | {
                 model_id
                 for model_id, pages in pages_by_model.items()
                 if len(pages) >= 2
             }
+            # Keep trusted persisted metadata, but augment it with IDs newly
+            # recognized by this version (notably slash-form model names in a
+            # legacy Chroma index).
+            catalogs[document_id] = persisted | filename_ids | inferred
         return catalogs
 
     @staticmethod
@@ -619,7 +617,7 @@ class ChromaStore:
         required_model_ids: set[str] | None = None,
         allowed_document_ids: set[str] | None = None,
     ) -> list[dict]:
-        """Attach adjacent chunks from the same document as parent context."""
+        """Attach nearby section/page chunks from the same document as context."""
         if radius <= 0:
             return chunks
         collection = self._get_collection(company_id)
@@ -656,12 +654,41 @@ class ChromaStore:
             if matching_index is None:
                 expanded.append(chunk)
                 continue
-            neighbors = []
-            root_evidence_type = chunk.get("evidence_type", "text")
-            for index in range(
+            neighbor_indexes = set(range(
                 matching_index - radius,
                 matching_index + radius + 1,
-            ):
+            ))
+            root_doc, root_meta = document_chunks[matching_index]
+            root_page = root_meta.get("page_number")
+            root_section = str(root_meta.get("section_heading", "")).strip().casefold()
+
+            # Tables, OCR, and vision descriptions can create several chunks
+            # between two pieces of one logical explanation. Include the same
+            # page/section and a small amount from an adjacent page rather than
+            # relying exclusively on chunk-index adjacency.
+            page_candidates = []
+            for index, (_doc, meta) in document_chunks.items():
+                page = meta.get("page_number")
+                section = str(meta.get("section_heading", "")).strip().casefold()
+                same_page = root_page is not None and page == root_page
+                same_section = bool(root_section and section == root_section)
+                try:
+                    adjacent_page = root_page is not None and abs(int(page) - int(root_page)) <= 1
+                except (TypeError, ValueError):
+                    adjacent_page = False
+                if same_page or same_section or adjacent_page:
+                    priority = (0 if same_page or same_section else 1, abs(index - matching_index))
+                    page_candidates.append((priority, index))
+            page_candidates.sort()
+            context_limit = max(7, radius * 4 + 3)
+            for _priority, index in page_candidates:
+                neighbor_indexes.add(index)
+                if len(neighbor_indexes) >= context_limit:
+                    break
+
+            neighbors = []
+            root_evidence_type = chunk.get("evidence_type", "text")
+            for index in sorted(neighbor_indexes):
                 if index in document_chunks:
                     doc, meta = document_chunks[index]
                     if not self._chunk_matches_required_model(

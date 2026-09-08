@@ -1,0 +1,20 @@
+[
+  {
+    "id": "0126e6f9-e6dc-4cf3-93f5-dd33ab2b5e29",
+    "name": "company_6a32a001cea2603e5614af7c",
+    "dimension": 1536,
+    "config_json_str": "{\"hnsw_configuration\": {\"space\": \"l2\", \"ef_construction\": 100, \"ef_search\": 100, \"num_threads\": 8, \"M\": 16, \"resize_factor\": 1.2, \"batch_size\": 100, \"sync_threshold\": 1000, \"_type\": \"HNSWConfigurationInternal\"}, \"_type\": \"CollectionConfigurationInternal\"}"
+  },
+  {
+    "id": "c96c6c3d-03ab-4b30-9357-206c636937c1",
+    "name": "company_6a4f6ec8e98e9f046bf3ba8a",
+    "dimension": null,
+    "config_json_str": "{\"hnsw_configuration\": {\"space\": \"l2\", \"ef_construction\": 100, \"ef_search\": 100, \"num_threads\": 8, \"M\": 16, \"resize_factor\": 1.2, \"batch_size\": 100, \"sync_threshold\": 1000, \"_type\": \"HNSWConfigurationInternal\"}, \"_type\": \"CollectionConfigurationInternal\"}"
+  },
+  {
+    "id": "2310899a-6e41-4b2a-bd25-bdb8f46e40c0",
+    "name": "company_6a5df2d64639d0d9046ad146",
+    "dimension": null,
+    "config_json_str": "{\"hnsw_configuration\": {\"space\": \"l2\", \"ef_construction\": 100, \"ef_search\": 100, \"num_threads\": 8, \"M\": 16, \"resize_factor\": 1.2, \"batch_size\": 100, \"sync_threshold\": 1000, \"_type\": \"HNSWConfigurationInternal\"}, \"_type\": \"CollectionConfigurationInternal\"}"
+  }
+]

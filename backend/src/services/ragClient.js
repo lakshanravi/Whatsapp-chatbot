@@ -50,7 +50,7 @@ function buildQueryCacheKey({
   const historyText = (history || []).slice(-16).join("\n").toLowerCase();
   const historyKey = crypto.createHash("sha256").update(historyText).digest("hex");
   return JSON.stringify({
-    version: process.env.RAG_QUERY_CACHE_VERSION || "persistent-product-scope-v2",
+    version: process.env.RAG_QUERY_CACHE_VERSION || "answer-mode-pipeline-v3",
     companyId,
     question: normalizeQuestion(question),
     topK: topK || null,

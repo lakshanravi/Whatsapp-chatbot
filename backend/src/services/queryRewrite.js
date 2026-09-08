@@ -20,6 +20,9 @@ Rules:
 - An introduction includes a customer's name, such as "Hi, I am Maya". Greet them by name.
 - If the message mixes small talk with a real question (e.g. "hi how do I reset password"), use support_question.
 - For support_question, fix spelling and grammar in correctedQuestion while keeping the meaning.
+- Preserve whether the message is a question or a factual follow-up. Never turn a fragment such as
+  "12V battery, panel clean" into a new how-to question. Do not add a goal, object, symptom, or request
+  that the customer did not state.
 - reply must be one short friendly sentence for greeting, introduction, thanks, or goodbye.
 - Do not answer support questions in reply; only set correctedQuestion.`;
 
@@ -53,8 +56,18 @@ function parseAnalyzeResponse(content, original) {
       };
     }
 
-    const correctedQuestion =
+    let correctedQuestion =
       String(parsed.correctedQuestion || "").trim() || original;
+
+    // Short technical statements usually answer an earlier clarification.
+    // Grammar cleanup must not turn them into an unrelated question.
+    const factualFollowUp = !/[?]/.test(original) && (
+      /^(?:i\s+(?:have|use|am|measured|checked)|the\s+(?:battery|panel|controller|inverter|charger)|yes\b|no\b)/i.test(original)
+      || /\b\d+(?:\.\d+)?\s*(?:v|a|w|ah|vac|vdc)\b/i.test(original)
+    );
+    if (factualFollowUp && /[?]/.test(correctedQuestion)) {
+      correctedQuestion = original;
+    }
 
     return {
       intent: "support_question",
@@ -115,4 +128,4 @@ async function rewriteUserQuery(message) {
   return analyzed.correctedQuestion || String(message || "").trim();
 }
 
-module.exports = { analyzeUserMessage, rewriteUserQuery };
+module.exports = { analyzeUserMessage, rewriteUserQuery, parseAnalyzeResponse };

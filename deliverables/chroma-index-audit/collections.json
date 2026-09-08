@@ -1,0 +1,8 @@
+[
+  {
+    "id": "f6f123d4-a5c8-4405-9363-ccdd90e33a3f",
+    "name": "company_6a4f6ec8e98e9f046bf3ba8a",
+    "dimension": 1536,
+    "config_json_str": "{\"hnsw_configuration\": {\"space\": \"l2\", \"ef_construction\": 100, \"ef_search\": 100, \"num_threads\": 2, \"M\": 16, \"resize_factor\": 1.2, \"batch_size\": 100, \"sync_threshold\": 1000, \"_type\": \"HNSWConfigurationInternal\"}, \"_type\": \"CollectionConfigurationInternal\"}"
+  }
+]

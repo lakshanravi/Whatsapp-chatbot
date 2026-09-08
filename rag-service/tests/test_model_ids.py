@@ -71,6 +71,29 @@ class ModelIdTests(unittest.TestCase):
             set(),
         )
 
+    def test_victron_slash_models_are_recognized_with_product_context(self):
+        self.assertEqual(
+            extract_model_ids(
+                "Can I use a Victron SmartSolar MPPT 75/10 or an Orion 12/12-30?"
+            ),
+            {"7510", "121230"},
+        )
+
+    def test_slash_voltage_specification_is_not_a_model(self):
+        self.assertNotIn(
+            "120240",
+            extract_model_ids("The inverter supports 120/240 VAC output."),
+        )
+
+    def test_legacy_metadata_is_augmented_with_slash_model_from_content(self):
+        self.assertIn(
+            "7510",
+            item_model_ids(
+                "Victron SmartSolar MPPT 75/10 specifications",
+                {"model_ids": "MPPT75"},
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

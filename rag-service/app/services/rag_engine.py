@@ -31,6 +31,11 @@ Rules:
 - Do NOT handle orders, bookings, payments, or transactions. If asked, politely explain you can only help with support questions from the knowledge base.
 - If troubleshooting steps are in the context, list them in order.
 - Adapt the response to the request type: answer factual questions directly, compare named products side by side, recommend from stated needs and constraints, and provide ordered diagnosis for troubleshooting.
+- A message may contain several different questions. Answer every supported sub-question separately; do not silently answer only the first one.
+- For troubleshooting, give the documented likely causes and checks first. Ask for a measurement only when it is needed to distinguish the remaining causes; do not replace a useful cause list with a questionnaire.
+- For compatibility and safety questions, compare every documented limit with the customer's stated values. Clearly identify any missing value needed for a final yes/no decision.
+- For calculations, distinguish values quoted from sources from values calculated from them, show the short formula, and state assumptions.
+- For procedures and configuration questions, use ordered steps. For comparisons, use a compact side-by-side structure.
 - For scenario questions, explicitly connect each recommendation or instruction to the customer's stated conditions.
 
 Conversation style:
@@ -105,6 +110,70 @@ class RAGEngine:
             return [question] + variants[:4]
         except Exception:
             return [question]
+
+    @staticmethod
+    def _answer_modes(question: str) -> list[str]:
+        """Classify all answer shapes a request needs without industry hard-coding."""
+        text = " ".join(str(question or "").casefold().split())
+        modes: list[str] = []
+
+        def add(mode: str, pattern: str) -> None:
+            if re.search(pattern, text) and mode not in modes:
+                modes.append(mode)
+
+        add("comparison", r"\b(?:compare|comparison|difference|versus|vs\.?)\b")
+        add("recommendation", r"\b(?:recommend|suggest|best|choose|select|which one|right for me)\b")
+        add("troubleshooting_causes", r"\b(?:why|cause|causes|problem|issue|fault|error|not\s+(?:turn|work|start|charge)|won't|doesn't|isn't)\b")
+        add("compatibility", r"\b(?:compatible|compatibility|can i|could i|work with|use with|connect|wire|series|parallel|support)\b")
+        add("safety_limits", r"\b(?:safe|safety|fry|damage|danger|maximum|max\b|minimum|min\b|limit|exceed|overcurrent|overvoltage|cold|fuse|wire size)\b")
+        add("calculation", r"\b(?:calculate|how many|how much|what size|sizing|total|combined|margin)\b")
+        add("procedure", r"\b(?:how do i|how to|steps?|install|replace|reset|connect|wire)\b")
+        add("configuration", r"\b(?:configure|configuration|setting|settings|preset|profile|dial|switch position)\b")
+        add("behavior", r"\b(?:what happens|behavou?r|turning on|turn on|charge|disconnect|terminals?|outputs?)\b")
+        add("definition", r"\b(?:what is|what are|purpose|mean|means)\b")
+        if not modes:
+            modes.append("fact_lookup")
+        return modes
+
+    @staticmethod
+    def _mode_search_queries(question: str, modes: list[str]) -> list[str]:
+        """Add evidence-shaped searches when query expansion is unavailable or vague."""
+        suffixes = {
+            "troubleshooting_causes": "troubleshooting possible causes symptoms checks solution",
+            "compatibility": "compatibility requirements supported models allowed connections",
+            "safety_limits": "technical specifications absolute maximum minimum limits warnings protection",
+            "calculation": "technical specifications formula sizing values",
+            "procedure": "installation configuration procedure steps",
+            "configuration": "settings configuration preset parameters",
+            "behavior": "operation behavior protection load output",
+            "comparison": "features specifications differences",
+            "definition": "description purpose operation",
+        }
+        return [
+            f"{question} {suffixes[mode]}"
+            for mode in modes
+            if mode in suffixes
+        ][:4]
+
+    @staticmethod
+    def _apply_answer_mode_boosts(candidates: list[dict], modes: list[str]) -> None:
+        """Prefer evidence whose structure matches the requested answer type."""
+        patterns = {
+            "troubleshooting_causes": r"\b(?:troubleshoot|possible cause|cause|check|not start|not charge|fault)\b",
+            "compatibility": r"\b(?:compatible|support|requirement|connect|series|parallel|input)\b",
+            "safety_limits": r"\b(?:warning|caution|maximum|max\.?|minimum|min\.?|limit|protect|voltage|current)\b",
+            "procedure": r"\b(?:step|procedure|installation|configure|connect|setting)\b",
+            "configuration": r"\b(?:setting|configuration|preset|profile|switch|dial)\b",
+            "comparison": r"\b(?:specification|feature|model|version)\b",
+        }
+        for chunk in candidates:
+            content = chunk.get("content", "")
+            matches = sum(
+                1 for mode in modes
+                if mode in patterns and re.search(patterns[mode], content, re.I)
+            )
+            if matches:
+                chunk["rank_score"] = chunk.get("rank_score", 0.0) + min(0.018, matches * 0.006)
 
     def _multilingual_variants(self, question: str) -> list[str]:
         if not settings.enable_multilingual_search:
@@ -324,7 +393,7 @@ class RAGEngine:
 
     @staticmethod
     def _is_clear_factual_question(question: str) -> bool:
-        """Keep ordinary fact lookups out of the AI clarification path."""
+        """Keep answerable support requests out of the pre-retrieval questionnaire."""
         normalized = " ".join(question.casefold().split()).strip()
         if (
             not normalized
@@ -334,6 +403,19 @@ class RAGEngine:
             return False
 
         if re.search(r"\b(?:compare|comparison|difference|different)\b|\bvs\.?\b|\bversus\b", normalized):
+            return True
+
+        # Troubleshooting, compatibility, safety, configuration, procedures,
+        # and behaviour questions should retrieve evidence first. The answer
+        # can provide documented causes/limits and then ask only for a truly
+        # decision-critical missing measurement.
+        if re.search(
+            r"\b(?:why|what causes?|possible causes?|troubleshoot|error\s+\w+|"
+            r"not working|not turning|not charging|won't|doesn't|isn't|"
+            r"compatible|can i|could i|safe|fry|what happens|how do i|how to|"
+            r"configure|configuration|setting|preset|wire|connect)\b",
+            normalized,
+        ):
             return True
 
         if extract_model_ids(question) and re.search(
@@ -353,6 +435,8 @@ class RAGEngine:
             r"(?:does|do|did|can|could|is|are|was|were|will|would|has|have)\b|"
             r"where\s+(?:is|are|does|do|can|could)\b|"
             r"when\s+(?:is|are|does|do|did|can|could|will)\b|"
+            r"why\b|"
+            r"how\s+(?:do|does|can|should)\b|"
             r"how\s+(?:much|many|long|wide|high|fast|deep|heavy)\b|"
             r"which\s+(?:port|ports|connector|connectors|input|output|fuse|"
             r"cable|setting|code|terminal|terminals)\b"
@@ -399,6 +483,17 @@ class RAGEngine:
             r"\b(?:it|its|itself|this|that|these|those|they|their|them)\b|"
             r"\b(?:this|that|the)\s+(?:one|ones|product|model|unit|item)\b|"
             r"\b(?:first|second|third|other|last)\s+one\b",
+            normalized,
+        ):
+            return True
+
+        # A short declarative reply commonly supplies a measurement or rules
+        # out a cause requested in the previous turn ("I have a 12V battery",
+        # "the panel is clean"). It is not a new standalone support topic.
+        if "?" not in text and re.search(
+            r"^(?:i\s+(?:have|use|am|measured|checked)|it\s+(?:is|has)|"
+            r"the\s+(?:battery|panel|controller|inverter|charger|voltage|current)|"
+            r"yes\b|no\b)",
             normalized,
         ):
             return True
@@ -684,7 +779,9 @@ class RAGEngine:
             timings[name] = int((perf_counter() - started) * 1000)
 
         k = top_k or settings.top_k
+        answer_modes = self._answer_modes(question)
         retrieval_stats["top_k"] = k
+        retrieval_stats["answer_modes"] = ", ".join(answer_modes)
         retrieval_stats["reranking_enabled"] = bool(settings.enable_reranking or self.cross_encoder)
         retrieval_stats["answer_verification_enabled"] = bool(settings.enable_answer_verification)
         retrieval_stats["numeric_verification_enabled"] = bool(settings.enable_numeric_verification)
@@ -790,7 +887,7 @@ class RAGEngine:
         catalog_context = self._catalog_context(preliminary_candidates)
         if self._is_clear_factual_question(question):
             request_analysis = {
-                "intent": "factual",
+                "intent": answer_modes[0],
                 "scenario_summary": "",
                 "known_requirements": [],
                 "missing_requirements": [],
@@ -901,6 +998,7 @@ class RAGEngine:
         queries = []
         for variant in self._multilingual_variants(standalone_question):
             queries.extend(self._expand_query(variant))
+        queries.extend(self._mode_search_queries(standalone_question, answer_modes))
         if self._is_model_list_question(standalone_question):
             queries.append(
                 f"{standalone_question} models included in this manual exact model identifiers"
@@ -939,6 +1037,8 @@ class RAGEngine:
                     chunk["rank_score"] += 0.08
                 elif len(explicit_ids) >= 3:
                     chunk["rank_score"] += 0.04
+
+        self._apply_answer_mode_boosts(list(seen.values()), answer_modes)
 
         candidates = sorted(
             seen.values(), key=lambda c: c["rank_score"], reverse=True
@@ -1044,6 +1144,8 @@ class RAGEngine:
                         f"user: {question}\n\n"
                         f"Knowledge-base context:\n{context}\n\n"
                         f"Standalone search question: {standalone_question}\n\n"
+                        f"Required answer modes: {', '.join(answer_modes)}. "
+                        "Address every distinct sub-question in the user's message.\n\n"
                         + (
                             "Response requirement: the customer has completed the maximum "
                             "clarification rounds. Do not ask another question. Give the best "
@@ -1066,7 +1168,11 @@ class RAGEngine:
             allow_clarification=not clarification_exhausted,
         )
         answer = self._remove_verifier_commentary(answer)
-        unsupported_model_ids = self._unsupported_model_ids(answer, retrieved)
+        unsupported_model_ids = self._unsupported_model_ids(
+            answer,
+            retrieved,
+            allowed_model_ids=required_model_ids,
+        )
         retrieval_stats["model_id_repair_attempted"] = False
         retrieval_stats["initial_unsupported_model_id_count"] = len(
             unsupported_model_ids
@@ -1080,7 +1186,11 @@ class RAGEngine:
                 unsupported_model_ids,
             )
             answer = self._remove_verifier_commentary(answer)
-            unsupported_model_ids = self._unsupported_model_ids(answer, retrieved)
+            unsupported_model_ids = self._unsupported_model_ids(
+                answer,
+                retrieved,
+                allowed_model_ids=required_model_ids,
+            )
         retrieval_stats["unsupported_model_id_count"] = len(unsupported_model_ids)
         if unsupported_model_ids:
             timings["total"] = int((perf_counter() - query_started) * 1000)
@@ -1123,20 +1233,20 @@ class RAGEngine:
             unsupported_numeric_claims
         )
         if unsupported_numeric_claims:
-            timings["total"] = int((perf_counter() - query_started) * 1000)
-            return QueryResponse(
-                answer=(
-                    "I found related information, but I couldn't confirm the exact value "
-                    "for that product confidently. Please check the product model or rephrase "
-                    "the specification you need."
-                ),
-                sources=[],
-                suggestions=[],
-                diagnostics=QueryDiagnostics(
-                    timings_ms=timings,
-                    retrieval=retrieval_stats,
-                ),
+            answer = self._remove_unsupported_numeric_sentences(
+                answer, unsupported_numeric_claims
             )
+            retrieval_stats["numeric_claims_removed"] = len(unsupported_numeric_claims)
+            unsupported_numeric_claims = self._unsupported_numeric_claims(answer, retrieved)
+            retrieval_stats["unsupported_numeric_claim_count"] = len(
+                unsupported_numeric_claims
+            )
+            if not answer.strip() or unsupported_numeric_claims:
+                answer = (
+                    "I found related guidance, but the documents don't confirm the exact "
+                    "numeric value needed for a final result. Please share the exact product "
+                    "model and the missing specification."
+                )
         if self._is_unsupported_answer(answer):
             if clarification_exhausted:
                 answer = (
@@ -1232,9 +1342,42 @@ class RAGEngine:
             "i could not find relevant information",
             "not available in the documents",
         )
+        # A useful partial answer may accurately say that one final input is
+        # missing. Treat it as unsupported only when it contains no citation.
+        if re.search(r"\[source\s+\d+\]", answer, re.I):
+            return False
         return bool(re.search(r"\bi (?:don't|do not) have\b", normalized)) or any(
             phrase in normalized for phrase in unsupported_phrases
         )
+
+    @classmethod
+    def _remove_unsupported_numeric_sentences(
+        cls,
+        answer: str,
+        unsupported_claims: list[tuple[str, str, str]],
+    ) -> str:
+        """Drop only residual unsupported claims, preserving the useful answer."""
+        unsupported = set(unsupported_claims)
+        kept: list[str] = []
+        for line in answer.splitlines():
+            if not line.strip():
+                kept.append(line)
+                continue
+            sentences = re.split(r"(?<=[.!?])\s+", line)
+            safe_sentences = [
+                sentence for sentence in sentences
+                if not (cls._numeric_claims(sentence) & unsupported)
+            ]
+            if safe_sentences:
+                kept.append(" ".join(safe_sentences))
+        cleaned = "\n".join(kept)
+        cleaned = re.sub(
+            r"(?im)^\s*(?:[-*]|\d+[.)])?\s*(?:\[Source\s+\d+\])?\s*$",
+            "",
+            cleaned,
+        )
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()
 
     @staticmethod
     def _numeric_claims(text: str) -> set[tuple[str, str, str]]:
@@ -1363,7 +1506,11 @@ class RAGEngine:
         return sorted(claims - source_claims)
 
     @staticmethod
-    def _unsupported_model_ids(answer: str, retrieved: list[dict]) -> list[str]:
+    def _unsupported_model_ids(
+        answer: str,
+        retrieved: list[dict],
+        allowed_model_ids: set[str] | None = None,
+    ) -> list[str]:
         model_ids = extract_model_ids(answer)
         if not model_ids:
             return []
@@ -1381,7 +1528,11 @@ class RAGEngine:
             )
             for index in sorted(cited)
         )
-        return sorted(model_ids - extract_model_ids(supporting_text))
+        return sorted(
+            model_ids
+            - extract_model_ids(supporting_text)
+            - (allowed_model_ids or set())
+        )
 
     def _repair_model_id_answer(
         self,
