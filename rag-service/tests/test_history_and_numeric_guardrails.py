@@ -1,9 +1,126 @@
 import unittest
 
-from app.services.rag_engine import RAGEngine
+from app.services.rag_engine import (
+    RAGEngine,
+    SALES_ASSISTANT_PROMPT,
+    SUPPORT_DECISION_PROMPT,
+    SYSTEM_PROMPT,
+)
 
 
 class HistoryAndNumericGuardrailTests(unittest.TestCase):
+    def test_customer_answers_default_to_prose_not_tables(self):
+        self.assertIn("Default to natural prose", SYSTEM_PROMPT)
+        self.assertIn("Do not create a table", SYSTEM_PROMPT)
+        self.assertIn("Keep citations unobtrusive", SYSTEM_PROMPT)
+
+    def test_product_help_stays_relevant_and_inside_company_catalog(self):
+        self.assertIn("a battery monitor is not an answer to a solar-panel request", SYSTEM_PROMPT)
+        self.assertIn("Never direct the customer to another dealer", SYSTEM_PROMPT)
+        self.assertIn("Never pad an answer with a loosely related product", SYSTEM_PROMPT)
+        self.assertIn("Never ask a customer to provide this company's datasheet", SYSTEM_PROMPT)
+        self.assertIn("Do not transfer a company knowledge-base gap", SYSTEM_PROMPT)
+
+    def test_sales_assistant_is_helpful_but_grounded(self):
+        self.assertIn("helpful in-store product specialist", SALES_ASSISTANT_PROMPT)
+        self.assertIn("lead with one best-supported choice", SALES_ASSISTANT_PROMPT)
+        self.assertIn("Do not add a sales pitch to a simple technical", SALES_ASSISTANT_PROMPT)
+        self.assertIn("Never invent prices, stock, promotions", SALES_ASSISTANT_PROMPT)
+
+    def test_support_agent_distinguishes_company_and_customer_information(self):
+        self.assertIn("separate company-owned facts from customer-owned facts", SUPPORT_DECISION_PROMPT)
+        self.assertIn("If the evidence answers the question, answer it now", SUPPORT_DECISION_PROMPT)
+        self.assertIn("do not ask the customer to find it", SUPPORT_DECISION_PROMPT)
+        self.assertIn("ask one easy question", SUPPORT_DECISION_PROMPT)
+
+    def test_requirement_reply_keeps_previous_customer_need(self):
+        self.assertTrue(RAGEngine._question_requires_history(
+            "I need around 100Ah, 12V."
+        ))
+
+    def test_winter_battery_requirements_are_sufficient_to_search(self):
+        self.assertTrue(RAGEngine._has_actionable_battery_requirements(
+            "I need a battery for Canadian winters, around 100Ah and 12V."
+        ))
+
+    def test_real_customer_questions_receive_all_required_answer_modes(self):
+        cases = [
+            (
+                "Can I wire two 400W panels in series, or will that fry the controller in winter?",
+                {"compatibility", "safety_limits", "environmental_conditions"},
+            ),
+            (
+                "My app shows Error 33 - PV over-voltage. Is it permanently dead?",
+                {"troubleshooting_causes", "safety_limits"},
+            ),
+            (
+                "What size fuse should I install between the controller and battery?",
+                {"safety_limits", "calculation"},
+            ),
+            (
+                "Does the MPPT talk to my SmartShunt over Bluetooth or VE.Direct?",
+                {"compatibility", "communications"},
+            ),
+            (
+                "How does sodium-ion compare with LiFePO4 in freezing weather?",
+                {"comparison", "environmental_conditions"},
+            ),
+        ]
+
+        for question, required_modes in cases:
+            with self.subTest(question=question):
+                self.assertTrue(
+                    required_modes.issubset(set(RAGEngine._answer_modes(question)))
+                )
+
+    def test_winter_pv_question_prioritizes_exact_limit_searches(self):
+        question = (
+            "Can I wire two 400W panels in series into a Victron 100/20, "
+            "or will that fry it in winter?"
+        )
+        modes = RAGEngine._answer_modes(question)
+        queries = RAGEngine._critical_limit_search_queries(
+            question, modes, {"10020"}
+        )
+        self.assertEqual(len(queries), 2)
+        self.assertIn("maximum PV open circuit voltage", queries[0])
+        self.assertIn("temperature coefficient", queries[1])
+        self.assertIn("10020", queries[0])
+
+    def test_exact_capacity_guard_rejects_different_product_capacity(self):
+        required = RAGEngine._strict_capacity_signatures(
+            "Can I mount the SunDale Heated 12V 200Ah battery on its side?"
+        )
+        self.assertEqual(required, {"200ah"})
+        self.assertFalse(RAGEngine._candidate_matches_capacity(
+            {
+                "document_name": "SunDale Heated 12V 100Ah Datasheet.pdf",
+                "content": "Nominal capacity 100Ah",
+            },
+            required,
+        ))
+        self.assertTrue(RAGEngine._candidate_matches_capacity(
+            {
+                "document_name": "SunDale Heated 12V 200Ah Manual.pdf",
+                "content": "Installation instructions",
+            },
+            required,
+        ))
+
+    def test_approximate_capacity_need_does_not_force_exact_match(self):
+        self.assertEqual(
+            RAGEngine._strict_capacity_signatures(
+                "I need around 100Ah at 12V for winter."
+            ),
+            set(),
+        )
+
+    def test_decimal_energy_capacity_is_normalized(self):
+        self.assertEqual(
+            RAGEngine._strict_capacity_signatures("Growatt 9.90kWh battery"),
+            {"9.9kwh"},
+        )
+
     def test_persisted_topic_scopes_a_generic_specification_follow_up(self):
         calls = []
 
@@ -41,13 +158,29 @@ class HistoryAndNumericGuardrailTests(unittest.TestCase):
         )
 
         self.assertTrue(calls)
+        scoped_calls = [call for call in calls if call]
+        self.assertTrue(scoped_calls)
         self.assertTrue(all(
             call["required_product_names"] == {"suresine"}
             and call["allowed_document_ids"] == {"suresine-datasheet"}
-            for call in calls
+            for call in scoped_calls
         ))
         self.assertTrue(response.diagnostics.retrieval["document_scope_applied"])
         self.assertTrue(response.diagnostics.retrieval["product_filter_applied"])
+
+    def test_document_overlap_supports_unknown_brand_without_manual_pattern(self):
+        question = "What voltage does the Acme heated rack battery provide?"
+        matching = "Acme 48V Heated Rack Battery/datasheet.pdf"
+        unrelated = "Generic inverter installation manual.pdf"
+
+        self.assertGreater(
+            RAGEngine._document_query_overlap(question, matching),
+            0,
+        )
+        self.assertEqual(
+            RAGEngine._document_query_overlap(question, unrelated),
+            0,
+        )
 
     def test_explicit_new_model_drops_previous_product_history(self):
         history = [

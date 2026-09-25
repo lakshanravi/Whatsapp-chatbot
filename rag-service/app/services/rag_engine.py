@@ -25,6 +25,10 @@ Rules:
 - Do not invent facts that aren't supported by the context, but do paraphrase and combine information across the given sources to answer fully.
 - Cite supporting sources inline using their labels, for example [Source 1]. Never cite a source that does not support the statement.
 - A product or service claim must be supported by a context block about that same named product or service. Never use one product's document as support for a different product.
+- Answer only with evidence that is relevant to the product category the customer asked about. For example, a battery monitor is not an answer to a solar-panel request. Ignore unrelated context even when it shares a brand or general solar terminology.
+- Keep product discovery and recommendations within the company's supplied catalog. Never direct the customer to another dealer, marketplace, manufacturer website, or outside seller. If the catalog evidence does not contain a suitable product, say that you cannot identify a matching option in the available catalog and ask for the smallest useful requirement.
+- Never ask a customer to provide this company's datasheet, manual, product specification, catalog record, or other company-owned information. Finding and maintaining company product information is the company's responsibility. When a company-product specification is unavailable, state that it is not currently available in the product information, ask only for customer-owned details that can still move the decision forward, and offer a verified company-catalog alternative only if relevant evidence for one was actually retrieved.
+- Do not claim that a product is the "latest", "newest", or currently available unless the supplied evidence contains a date, catalog status, or other support for that claim. When recency cannot be verified, offer the closest relevant products in the available catalog without presenting them as current releases.
 - When asked which models are available, list only identifiers explicitly presented as models in the source. Preserve their exact letters, digits, hyphens, slashes, and suffixes; never replace model IDs with voltage categories.
 - Return only a customer-facing answer. Never mention the draft, supplied context, verification, unsupported claims, or text that should be removed.
 - When the context does not support an answer, ask one concise clarification question. Do not claim that the customer must contact support.
@@ -35,20 +39,34 @@ Rules:
 - For troubleshooting, give the documented likely causes and checks first. Ask for a measurement only when it is needed to distinguish the remaining causes; do not replace a useful cause list with a questionnaire.
 - For compatibility and safety questions, compare every documented limit with the customer's stated values. Clearly identify any missing value needed for a final yes/no decision.
 - For calculations, distinguish values quoted from sources from values calculated from them, show the short formula, and state assumptions.
-- For procedures and configuration questions, use ordered steps. For comparisons, use a compact side-by-side structure.
+- For PV string sizing, never decide from panel wattage alone. Require or identify panel Voc, series count, lowest expected temperature, temperature coefficient, and the controller's absolute maximum PV voltage. Treat a missing cold-weather value as decision-critical.
+- For cable or fuse sizing, require the documented equipment limit plus system voltage, maximum continuous current, conductor length, installation/temperature conditions, and the applicable electrical rules. Do not present a final size when these inputs are missing.
+- For inverter/load feasibility, compare continuous load, startup surge, battery/BMS discharge limit, inverter efficiency, and system voltage. Do not infer appliance surge from running watts.
+- Never recommend series or parallel connection of different battery chemistries, materially different capacities, ages, or states of charge unless the documents explicitly permit that exact configuration.
+- Never assume products from the same brand are compatible. For expansion batteries, name only pairings or connector requirements explicitly supported by the evidence; otherwise give the known rule and ask for both exact models.
+- A warranty length, feature count, or protection list does not prove real-world reliability. State when independent reliability evidence is unavailable.
+- Installation instructions, warranty conditions, and manufacturer claims are not reliability evidence. Never use them to declare one product or brand more reliable.
+- For procedures and configuration questions, use ordered steps. For comparisons, usually use two or three short paragraphs or a few compact bullets. Use a Markdown table only when the user explicitly asks for a table or when at least three products or at least three matching attributes would be materially clearer in a table.
 - For scenario questions, explicitly connect each recommendation or instruction to the customer's stated conditions.
 
 Conversation style:
 - Write like a friendly, knowledgeable human support assistant. Keep the tone warm, calm, and professional.
 - Use natural wording and contractions such as "I'll", "you're", and "that's" where they fit.
 - Give the direct answer first, then add only the details that help the customer act on it.
+- For a simple specification question, answer only the requested specification plus one directly useful supported detail at most. Do not add generic benefits or background knowledge about a chemistry, technology, or brand unless the customer asks for it.
+- Translate manual language into a practical customer answer. Do not merely repeat specification-table labels or summarize a document page.
+- If an exact yes/no depends on missing model details, first give the useful rule and any supported examples, then ask for the smallest missing detail. Never reply with only "it depends" or only a clarification question when partial guidance is available.
 - When the customer describes a problem, briefly acknowledge it before giving the solution, but do not over-apologize.
 - Prefer simple words, short paragraphs, and clear sentences. Use bullets or numbered steps only when they improve readability.
+- Default to natural prose, not a specification sheet, report, or feature matrix. Do not create a table for an ordinary factual question or a simple two-option comparison unless the user explicitly asks for one.
+- Keep citations unobtrusive: place one citation at the end of the sentence or paragraph it supports. When one source supports several consecutive facts in the same paragraph, cite it once at the end rather than repeating the same marker after every sentence.
 - Never use internal or robotic phrases such as "the supplied context states", "the context indicates", or "based on the retrieved chunks".
 - Do not repeat a greeting, apology, or closing in every answer. Avoid filler, excessive enthusiasm, and unnecessary emojis.
 - Ask one natural follow-up question only when more information would materially improve the answer.
+- Follow-up questions may request facts the customer reasonably owns, such as their available dimensions, equipment model, measured voltage, intended use, or budget. Do not transfer a company knowledge-base gap to the customer by requesting company documents.
 - Match the customer's language where practical. Never sacrifice accuracy or invent details just to sound conversational.
 - Treat every reply as the next turn in a real conversation: respond to what the person actually said instead of restating their question.
+- Never pad an answer with a loosely related product merely because no exact answer was found. A short honest answer plus one useful question is better than irrelevant product information.
 - Avoid formal headings such as "Answer", "Response", or "Conclusion" for simple replies, and never refer to the person as "the customer".
 - Vary transitions and sentence openings naturally so replies do not feel copied from a fixed template.
 
@@ -73,6 +91,32 @@ Product recommendation behavior:
 - Once enough information is available, stop asking questions. Recommend the best-fitting option(s), explain why they fit, mention meaningful trade-offs, and cite every product claim.
 - If no available product satisfies a stated hard requirement, say so clearly and explain the closest documented option instead of weakening the requirement.
 - Questions themselves do not need citations. Keep them conversational and in the user's language where practical."""
+
+SALES_ASSISTANT_PROMPT = """Customer engagement behavior:
+- When the customer is browsing, asking what to buy, requesting the latest options, or describing a need, act like a helpful in-store product specialist for this company.
+- Start with the customer's goal, then present the strongest matching company product and explain its practical benefit in everyday language. Do not merely list specifications.
+- Use a simple value pattern: name the product, say why it fits this customer's stated use, highlight up to three supported benefits, and mention one meaningful limitation or compatibility condition when relevant.
+- Make the response inviting and confident but never pushy. Do not use hype such as "perfect", "best on the market", "guaranteed", or "must-buy" unless that exact claim is supported.
+- If several products plausibly fit, lead with one best-supported choice and mention at most two alternatives with a clear reason to choose each.
+- End a shopping or discovery response with one easy, relevant next question that moves the customer toward a suitable company product, unless the customer already supplied everything needed.
+- Do not add a sales pitch to a simple technical, troubleshooting, warranty, or safety answer. Accuracy and solving the customer's question come first.
+- Never invent prices, stock, promotions, delivery dates, certifications, performance, compatibility, or superiority. Only describe benefits that follow directly from supported product facts.
+- Never disparage competitors. Explain differences factually and connect them to the customer's use case.
+"""
+
+SUPPORT_DECISION_PROMPT = """Customer-support decision policy:
+- Decide the response from evidence and conversation state; do not follow a rigid question template.
+- First separate company-owned facts from customer-owned facts. Company-owned facts include product dimensions, specifications, compatibility lists, warranty terms, stock facts, manuals, and catalog data. Customer-owned facts include their measurements, existing equipment, environment, intended use, symptoms, preferences, and budget.
+- If the evidence answers the question, answer it now. Do not ask a follow-up merely to continue the conversation.
+- If a safe calculation can be completed from supplied and documented values, perform it and explain the result briefly.
+- If a missing customer-owned fact could materially change the result, give all useful supported guidance first and then ask one easy question for only that fact.
+- If a company-owned fact is missing, do not ask the customer to find it. State the limitation briefly without blaming the knowledge base, and use verified catalog evidence to offer a relevant next step or alternative when available.
+- If both company-owned and customer-owned facts are missing, do not interrogate the customer. Ask only for the single customer-owned fact that would be useful after the company information is available.
+- For safety-critical questions, never turn uncertainty into a confident yes or no. Explain the applicable documented limit and the exact customer measurement needed.
+- Keep the interaction moving toward a resolution: answer, calculate, narrow to a product, provide safe checks, or clearly identify the unresolved company-side fact.
+"""
+
+SYSTEM_PROMPT += "\n\n" + SALES_ASSISTANT_PROMPT + "\n\n" + SUPPORT_DECISION_PROMPT
 
 
 class RAGEngine:
@@ -124,9 +168,11 @@ class RAGEngine:
         add("comparison", r"\b(?:compare|comparison|difference|versus|vs\.?)\b")
         add("recommendation", r"\b(?:recommend|suggest|best|choose|select|which one|right for me)\b")
         add("troubleshooting_causes", r"\b(?:why|cause|causes|problem|issue|fault|error|not\s+(?:turn|work|start|charge)|won't|doesn't|isn't)\b")
-        add("compatibility", r"\b(?:compatible|compatibility|can i|could i|work with|use with|connect|wire|series|parallel|support)\b")
-        add("safety_limits", r"\b(?:safe|safety|fry|damage|danger|maximum|max\b|minimum|min\b|limit|exceed|overcurrent|overvoltage|cold|fuse|wire size)\b")
+        add("compatibility", r"\b(?:compatible|compatibility|can i|could i|work with|use with|connect|wire|series|parallel|support|talk to|communicate with)\b")
+        add("safety_limits", r"\b(?:safe|safety|fry|damage|danger|maximum|max\b|minimum|min\b|limit|exceed|over[\s-]?current|over[\s-]?voltage|cold|fuse|wire size)\b")
         add("calculation", r"\b(?:calculate|how many|how much|what size|sizing|total|combined|margin)\b")
+        add("environmental_conditions", r"\b(?:winter|freez(?:e|ing)|below zero|subzero|cold weather|hot weather|shade|shading|high winds?|temperature coefficient|derating)\b")
+        add("communications", r"\b(?:bluetooth|wi-?fi|canbus|can bus|rs485|modbus|ve\.?(?:direct|can)|ethernet|communication cable|mobile app|iphone|android)\b")
         add("procedure", r"\b(?:how do i|how to|steps?|install|replace|reset|connect|wire)\b")
         add("configuration", r"\b(?:configure|configuration|setting|settings|preset|profile|dial|switch position)\b")
         add("behavior", r"\b(?:what happens|behavou?r|turning on|turn on|charge|disconnect|terminals?|outputs?)\b")
@@ -143,6 +189,8 @@ class RAGEngine:
             "compatibility": "compatibility requirements supported models allowed connections",
             "safety_limits": "technical specifications absolute maximum minimum limits warnings protection",
             "calculation": "technical specifications formula sizing values",
+            "environmental_conditions": "temperature environmental limits derating cold weather correction operating conditions",
+            "communications": "communications ports protocol wiring app bluetooth CAN RS485 configuration",
             "procedure": "installation configuration procedure steps",
             "configuration": "settings configuration preset parameters",
             "behavior": "operation behavior protection load output",
@@ -156,6 +204,125 @@ class RAGEngine:
         ][:4]
 
     @staticmethod
+    def _critical_limit_search_queries(
+        question: str,
+        modes: list[str],
+        model_ids: set[str],
+    ) -> list[str]:
+        """Create deterministic searches for safety facts that broad prose can bury."""
+        text = " ".join(str(question or "").split())
+        if not ({"safety_limits", "compatibility"} & set(modes)):
+            return []
+        model_text = " ".join(sorted(model_ids))
+        subject = f"{text} {model_text}".strip()
+        focused: list[str] = []
+        if re.search(r"\b(?:solar|panels?|pv|mppt|voc|series|string)\b", text, re.I):
+            focused.append(
+                f"{subject} maximum PV open circuit voltage Voc short circuit current"
+            )
+            if "environmental_conditions" in modes or re.search(
+                r"\b(?:winter|cold|temperature)\b", text, re.I
+            ):
+                focused.append(
+                    f"{subject} series panels Voc temperature coefficient lowest "
+                    "ambient temperature cold"
+                )
+        return focused[:2]
+
+    @staticmethod
+    def _strict_capacity_signatures(text: str) -> set[str]:
+        """Return exact product capacities, excluding explicitly approximate needs."""
+        value = str(text or "")
+        if re.search(r"\b(?:about|around|approximately|approx\.?|roughly|near)\b", value, re.I):
+            return set()
+        signatures = set()
+        for number, unit in re.findall(
+            r"(?<![\w.])(\d+(?:[.,]\d+)?)\s*(kwh|wh|ah)\b",
+            value,
+            re.I,
+        ):
+            try:
+                normalized_number = format(
+                    Decimal(number.replace(",", ".")), "f"
+                )
+                if "." in normalized_number:
+                    normalized_number = normalized_number.rstrip("0").rstrip(".")
+            except InvalidOperation:
+                normalized_number = number.casefold()
+            signatures.add(f"{normalized_number}{unit.casefold()}")
+        return signatures
+
+    @classmethod
+    def _candidate_matches_capacity(
+        cls,
+        chunk: dict,
+        required_capacities: set[str],
+    ) -> bool:
+        if not required_capacities:
+            return True
+        evidence = " ".join((
+            str(chunk.get("document_name", "")),
+            str(chunk.get("content", "")),
+            str(chunk.get("context_content", "")),
+        ))
+        return bool(cls._strict_capacity_signatures(evidence) & required_capacities)
+
+    def _evidence_gap_queries(
+        self,
+        question: str,
+        answer_modes: list[str],
+        candidates: list[dict],
+    ) -> list[str]:
+        """Ask a bounded critic for missing evidence, independent of product domain."""
+        complex_modes = {
+            "comparison", "recommendation", "troubleshooting_causes",
+            "compatibility", "safety_limits", "calculation",
+            "environmental_conditions", "procedure", "configuration",
+        }
+        if not (complex_modes & set(answer_modes)):
+            return []
+        excerpts = []
+        for index, chunk in enumerate(candidates[:12], 1):
+            excerpts.append(
+                f"Evidence {index} | {chunk.get('document_name', '')} | "
+                f"page {chunk.get('page_number', '?')}:\n"
+                f"{chunk.get('content', '')[:700]}"
+            )
+        try:
+            response = self.openai.chat.completions.create(
+                model=settings.openai_chat_model,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "Act as an evidence-completeness critic for a grounded customer-support "
+                        "system. Determine the distinct facts needed to answer the question safely "
+                        "and usefully. Check whether the supplied evidence covers each fact for the "
+                        "exact named product, model, capacity, and version. Do not answer the "
+                        "question and do not use outside knowledge. Return JSON with one field, "
+                        "search_queries, containing zero to two short focused searches only for "
+                        "important missing facts. Preserve exact product identifiers and quantities. "
+                        "Return an empty array when the evidence is complete. Never search for a "
+                        "different model or capacity as a substitute.\n\n"
+                        f"Question:\n{question}\n\n"
+                        f"Required answer modes: {', '.join(answer_modes)}\n\n"
+                        f"Current evidence:\n{chr(10).join(excerpts) or '(none)'}"
+                    ),
+                }],
+                response_format={"type": "json_object"},
+                temperature=0,
+                max_tokens=220,
+            )
+            parsed = json.loads(response.choices[0].message.content or "{}")
+            queries = parsed.get("search_queries") or []
+            return [
+                str(query).strip()[:500]
+                for query in queries
+                if str(query).strip()
+            ][:2]
+        except Exception:
+            return []
+
+    @staticmethod
     def _apply_answer_mode_boosts(candidates: list[dict], modes: list[str]) -> None:
         """Prefer evidence whose structure matches the requested answer type."""
         patterns = {
@@ -165,6 +332,8 @@ class RAGEngine:
             "procedure": r"\b(?:step|procedure|installation|configure|connect|setting)\b",
             "configuration": r"\b(?:setting|configuration|preset|profile|switch|dial)\b",
             "comparison": r"\b(?:specification|feature|model|version)\b",
+            "environmental_conditions": r"\b(?:temperature|cold|freez|derat|coefficient|shade|wind|environment)\b",
+            "communications": r"\b(?:bluetooth|wi-?fi|can|rs485|modbus|ve\.direct|ethernet|communication|app)\b",
         }
         for chunk in candidates:
             content = chunk.get("content", "")
@@ -371,6 +540,20 @@ class RAGEngine:
         ))
 
     @staticmethod
+    def _has_actionable_battery_requirements(question: str) -> bool:
+        """Avoid questionnaires when core battery-selection constraints are known."""
+        normalized = " ".join(question.casefold().split())
+        return bool(
+            re.search(r"\bbatter(?:y|ies)\b", normalized)
+            and re.search(r"\b\d+(?:\.\d+)?\s*v\b", normalized)
+            and re.search(r"\b\d+(?:\.\d+)?\s*ah\b", normalized)
+            and re.search(
+                r"\b(?:winters?|cold|freez(?:e|ing)|subzero|below zero|heated)\b",
+                normalized,
+            )
+        )
+
+    @staticmethod
     def _is_fully_unclear_question(question: str) -> bool:
         """Allow choice buttons only for short, explicitly unresolved requests."""
         normalized = " ".join(question.casefold().split()).strip(" .?!")
@@ -491,7 +674,8 @@ class RAGEngine:
         # out a cause requested in the previous turn ("I have a 12V battery",
         # "the panel is clean"). It is not a new standalone support topic.
         if "?" not in text and re.search(
-            r"^(?:i\s+(?:have|use|am|measured|checked)|it\s+(?:is|has)|"
+            r"^(?:i\s+(?:have|use|am|measured|checked|need|want|prefer|require)|"
+            r"i(?:'m|\s+am)\s+looking\s+for|it\s+(?:is|has)|"
             r"the\s+(?:battery|panel|controller|inverter|charger|voltage|current)|"
             r"yes\b|no\b)",
             normalized,
@@ -846,6 +1030,9 @@ class RAGEngine:
         )
         if not required_product_names and scoped_history:
             required_product_names = extract_product_names("\n".join(scoped_history))
+        required_capacities = self._strict_capacity_signatures(
+            base_standalone_question
+        )
         allowed_document_ids = (
             {
                 str(document_id).strip()
@@ -869,6 +1056,9 @@ class RAGEngine:
         retrieval_stats["required_product_names"] = ", ".join(
             sorted(required_product_names)
         )
+        retrieval_stats["required_capacities"] = ", ".join(
+            sorted(required_capacities)
+        )
         retrieval_stats["document_scope_applied"] = bool(allowed_document_ids)
         retrieval_stats["allowed_document_count"] = len(allowed_document_ids)
 
@@ -885,7 +1075,23 @@ class RAGEngine:
 
         started = perf_counter()
         catalog_context = self._catalog_context(preliminary_candidates)
-        if self._is_clear_factual_question(question):
+        clear_factual_question = self._is_clear_factual_question(question)
+        simple_factual_question = (
+            clear_factual_question and answer_modes == ["fact_lookup"]
+        )
+        if self._has_actionable_battery_requirements(base_standalone_question):
+            request_analysis = {
+                "intent": "recommendation",
+                "scenario_summary": base_standalone_question,
+                "known_requirements": [],
+                "missing_requirements": [],
+                "sufficient": True,
+                "clarification_question": "",
+                "clarification_options": [],
+                "allow_choice_buttons": False,
+                "no_more_information": False,
+            }
+        elif clear_factual_question:
             request_analysis = {
                 "intent": answer_modes[0],
                 "scenario_summary": "",
@@ -995,17 +1201,41 @@ class RAGEngine:
         mark("scenario_question", started)
 
         started = perf_counter()
-        queries = []
-        for variant in self._multilingual_variants(standalone_question):
-            queries.extend(self._expand_query(variant))
-        queries.extend(self._mode_search_queries(standalone_question, answer_modes))
+        if simple_factual_question:
+            # Exact factual questions already carry the model and requested
+            # specification. Avoid an extra LLM planning call and duplicate
+            # retrieval pass.
+            queries = [standalone_question]
+        else:
+            # Put deterministic, decision-critical limit searches first. LLM
+            # expansion can produce several broad variants; if those occupy the
+            # four-query budget, exact specification and cold-weather evidence
+            # may otherwise never reach retrieval.
+            queries = self._critical_limit_search_queries(
+                standalone_question,
+                answer_modes,
+                required_model_ids,
+            )
+            for variant in self._multilingual_variants(standalone_question):
+                queries.extend(self._expand_query(variant))
+            queries.extend(
+                self._mode_search_queries(standalone_question, answer_modes)
+            )
+            if "comparison" in answer_modes and required_product_names:
+                entity_queries = [
+                    f"{product_name} technical specifications features off-grid "
+                    "battery generator efficiency warranty"
+                    for product_name in sorted(required_product_names)
+                ]
+                queries = entity_queries + queries
         if self._is_model_list_question(standalone_question):
             queries.append(
                 f"{standalone_question} models included in this manual exact model identifiers"
             )
-        queries = list(dict.fromkeys(queries))
+        queries = list(dict.fromkeys(queries))[:6]
         mark("query_expansion", started)
         retrieval_stats["query_count"] = len(queries)
+        retrieval_stats["intelligent_multi_search"] = not simple_factual_question
 
         candidate_k = max(k, settings.retrieval_candidates)
         per_query_k = max(6, candidate_k // len(queries))
@@ -1014,7 +1244,8 @@ class RAGEngine:
             key = (chunk["document_id"], chunk.get("page_number"), chunk["content"][:80])
             seen[key] = chunk
         started = perf_counter()
-        for q in queries:
+        retrieval_queries = [] if simple_factual_question and seen else queries
+        for q in retrieval_queries:
             for chunk in self.store.hybrid_query(
                 company_id,
                 q,
@@ -1043,6 +1274,40 @@ class RAGEngine:
         candidates = sorted(
             seen.values(), key=lambda c: c["rank_score"], reverse=True
         )[:candidate_k]
+        if "comparison" in answer_modes and len(required_product_names) >= 2:
+            # A comparison normally needs separate evidence for each product;
+            # semantic rank alone can otherwise fill the candidate window with
+            # only the more frequently documented brand.
+            balanced = []
+            used = set()
+            for product_name in sorted(required_product_names):
+                for chunk in candidates:
+                    key = (
+                        chunk["document_id"],
+                        chunk.get("page_number"),
+                        chunk["content"][:80],
+                    )
+                    if key in used or product_name not in set(
+                        chunk.get("product_names", [])
+                    ):
+                        continue
+                    balanced.append(chunk)
+                    used.add(key)
+                    if sum(
+                        product_name in set(item.get("product_names", []))
+                        for item in balanced
+                    ) >= 3:
+                        break
+            balanced.extend(
+                chunk
+                for chunk in candidates
+                if (
+                    chunk["document_id"],
+                    chunk.get("page_number"),
+                    chunk["content"][:80],
+                ) not in used
+            )
+            candidates = balanced[:candidate_k]
         if required_model_ids:
             candidates = [
                 chunk for chunk in candidates
@@ -1055,6 +1320,71 @@ class RAGEngine:
                     )
                 )
             ]
+        if required_capacities:
+            candidates = [
+                chunk for chunk in candidates
+                if self._candidate_matches_capacity(chunk, required_capacities)
+            ]
+
+        # Round two is deliberately bounded: inspect the first-round evidence
+        # and search only for important missing facts. This scales to unseen
+        # questions without maintaining a question-specific rule list.
+        started = perf_counter()
+        gap_queries = self._evidence_gap_queries(
+            standalone_question,
+            answer_modes,
+            candidates,
+        )
+        retrieval_stats["evidence_second_round"] = bool(gap_queries)
+        retrieval_stats["evidence_gap_query_count"] = len(gap_queries)
+        for gap_query in gap_queries:
+            for chunk in self.store.hybrid_query(
+                company_id,
+                gap_query,
+                max(per_query_k, 8),
+                required_model_ids=required_model_ids,
+                required_product_names=required_product_names,
+                allowed_document_ids=allowed_document_ids,
+            ):
+                if not self._candidate_matches_capacity(
+                    chunk, required_capacities
+                ):
+                    continue
+                key = (
+                    chunk["document_id"],
+                    chunk.get("page_number"),
+                    chunk["content"][:80],
+                )
+                if key not in seen or chunk["rank_score"] > seen[key]["rank_score"]:
+                    seen[key] = chunk
+        if gap_queries:
+            round_two = sorted(
+                seen.values(),
+                key=lambda chunk: chunk["rank_score"],
+                reverse=True,
+            )
+            if required_model_ids:
+                round_two = [
+                    chunk for chunk in round_two
+                    if (
+                        set(chunk.get("model_ids", [])) & required_model_ids
+                        or (
+                            chunk.get("model_scope") == "shared"
+                            and set(chunk.get("document_model_ids", []))
+                            & required_model_ids
+                        )
+                    )
+                ]
+            if required_capacities:
+                round_two = [
+                    chunk for chunk in round_two
+                    if self._candidate_matches_capacity(
+                        chunk, required_capacities
+                    )
+                ]
+            self._apply_answer_mode_boosts(round_two, answer_modes)
+            candidates = round_two[:candidate_k]
+        mark("evidence_completion", started)
         if not self._is_visual_evidence_question(standalone_question):
             reliable_candidates = [
                 chunk for chunk in candidates
@@ -1064,11 +1394,77 @@ class RAGEngine:
                 candidates = reliable_candidates
         started = perf_counter()
         retrieved = self._rerank(standalone_question, candidates, k)
+        if not retrieved and "comparison" in answer_modes:
+            retrieved = candidates[:k]
         mark("rerank", started)
         retrieved = [
             chunk for chunk in retrieved
             if chunk["score"] >= settings.minimum_relevance_score
         ]
+        relaxed_retrieval = False
+        if not retrieved:
+            # Metadata extraction is intentionally conservative and legacy
+            # indexes can contain incorrect model/product labels. Give failed
+            # retrieval one bounded, unfiltered retry, but retain only results
+            # whose document name shares distinctive terms with the question.
+            # This recovers brand/title-based questions without opening the
+            # answer context to arbitrary manuals from the same company.
+            relaxed_seen = {}
+            for q in queries:
+                for chunk in self.store.hybrid_query(
+                    company_id,
+                    q,
+                    max(per_query_k, 12),
+                ):
+                    overlap = self._document_query_overlap(
+                        standalone_question,
+                        chunk.get("document_name", ""),
+                    )
+                    if overlap <= 0:
+                        continue
+                    chunk["rank_score"] = (
+                        chunk.get("rank_score", 0.0) + min(0.03, overlap * 0.01)
+                    )
+                    key = (
+                        chunk["document_id"],
+                        chunk.get("page_number"),
+                        chunk["content"][:80],
+                    )
+                    if (
+                        key not in relaxed_seen
+                        or chunk["rank_score"] > relaxed_seen[key]["rank_score"]
+                    ):
+                        relaxed_seen[key] = chunk
+            relaxed_candidates = sorted(
+                relaxed_seen.values(),
+                key=lambda chunk: chunk["rank_score"],
+                reverse=True,
+            )[:candidate_k]
+            if required_capacities:
+                relaxed_candidates = [
+                    chunk for chunk in relaxed_candidates
+                    if self._candidate_matches_capacity(
+                        chunk, required_capacities
+                    )
+                ]
+            if not self._is_visual_evidence_question(standalone_question):
+                reliable_relaxed = [
+                    chunk for chunk in relaxed_candidates
+                    if chunk.get("evidence_type", "text") != "vision"
+                ]
+                if reliable_relaxed:
+                    relaxed_candidates = reliable_relaxed
+            relaxed_results = self._rerank(
+                standalone_question,
+                relaxed_candidates,
+                k,
+            )
+            retrieved = [
+                chunk for chunk in relaxed_results
+                if chunk["score"] >= settings.minimum_relevance_score
+            ]
+            relaxed_retrieval = bool(retrieved)
+        retrieval_stats["relaxed_retrieval_used"] = relaxed_retrieval
         retrieval_stats["retrieved_count"] = len(retrieved)
         retrieval_stats["retrieved_locations"] = "; ".join(
             f"{chunk.get('document_name', '')}:p{chunk.get('page_number', '?')}"
@@ -1079,8 +1475,8 @@ class RAGEngine:
             company_id,
             retrieved,
             settings.neighbor_chunks,
-            required_model_ids=required_model_ids,
-            allowed_document_ids=allowed_document_ids,
+            required_model_ids=set() if relaxed_retrieval else required_model_ids,
+            allowed_document_ids=set() if relaxed_retrieval else allowed_document_ids,
         )
         mark("neighbor_expansion", started)
         
@@ -1147,6 +1543,25 @@ class RAGEngine:
                         f"Required answer modes: {', '.join(answer_modes)}. "
                         "Address every distinct sub-question in the user's message.\n\n"
                         + (
+                            "Comparison requirement: compare the named products clearly in natural "
+                            "prose or compact bullets. Do not use a table unless the user asked for "
+                            "one or a table is genuinely necessary to understand several matching "
+                            "attributes. Give evidence for each named product. If reliability is asked about, say "
+                            "evidence for each named product. If reliability is asked about, say "
+                            "that independent field reliability cannot be determined unless the "
+                            "sources contain that evidence. Never infer reliability from features, "
+                            "warranty length, installation guidance, or manufacturer language.\n\n"
+                            if "comparison" in answer_modes else ""
+                        )
+                        + (
+                            "Recommendation requirement: name the exact recommended product or "
+                            "model in the first sentence. Explicitly connect it to every stated "
+                            "requirement and identify any mismatch or trade-off, such as a "
+                            "different capacity. Do not refer to an unnamed 'this battery' or "
+                            "'this product'.\n\n"
+                            if request_analysis.get("intent") == "recommendation" else ""
+                        )
+                        + (
                             "Response requirement: the customer has completed the maximum "
                             "clarification rounds. Do not ask another question. Give the best "
                             "supported recommendation and explicitly state assumptions or gaps."
@@ -1177,6 +1592,9 @@ class RAGEngine:
         retrieval_stats["initial_unsupported_model_id_count"] = len(
             unsupported_model_ids
         )
+        retrieval_stats["initial_unsupported_model_ids"] = ", ".join(
+            unsupported_model_ids
+        )[:500]
         if unsupported_model_ids:
             retrieval_stats["model_id_repair_attempted"] = True
             answer = self._repair_model_id_answer(
@@ -1192,6 +1610,7 @@ class RAGEngine:
                 allowed_model_ids=required_model_ids,
             )
         retrieval_stats["unsupported_model_id_count"] = len(unsupported_model_ids)
+        retrieval_stats["unsupported_model_ids"] = ", ".join(unsupported_model_ids)[:500]
         if unsupported_model_ids:
             timings["total"] = int((perf_counter() - query_started) * 1000)
             return QueryResponse(
@@ -1320,6 +1739,25 @@ class RAGEngine:
                 normalized,
             )
         )
+
+    @staticmethod
+    def _document_query_overlap(question: str, document_name: str) -> int:
+        """Count distinctive title terms shared by a question and document path."""
+        ignored = {
+            "about", "answer", "battery", "capacity", "could", "datasheet",
+            "does", "document", "from", "give", "guide", "have", "manual",
+            "model", "provide", "specification", "system", "unit", "user",
+            "voltage", "what", "which", "with",
+        }
+        question_terms = {
+            term for term in re.findall(r"[a-z0-9]+", question.casefold())
+            if len(term) >= 3 and term not in ignored
+        }
+        document_terms = {
+            term for term in re.findall(r"[a-z0-9]+", document_name.casefold())
+            if len(term) >= 3 and term not in ignored
+        }
+        return len(question_terms & document_terms)
 
     @staticmethod
     def _deduplicate_source_documents(chunks: list[dict]) -> list[dict]:
@@ -1615,11 +2053,28 @@ class RAGEngine:
             answer,
         )
         cleaned = re.sub(r"(?im)^.*(?:draft answer|verified answer).*$", "", cleaned)
+        cleaned = re.sub(
+            r"(?i)(?:unfortunately,\s*)?(?:the|this) context (?:does not|doesn't) "
+            r"(?:include|provide|contain)",
+            "I couldn't confirm",
+            cleaned,
+        )
+        cleaned = re.sub(
+            r"(?i)based on (?:the )?(?:provided|supplied|retrieved) context",
+            "from the available product information",
+            cleaned,
+        )
         cleaned = (
             cleaned.replace("�C", "°C")
             .replace("�F", "°F")
             .replace("˚C", "°C")
             .replace("˚F", "°F")
+        )
+        cleaned = (
+            cleaned.replace("\u00c2\u00b0C", "\u00b0C")
+            .replace("\u00c2\u00b0F", "\u00b0F")
+            .replace("\u00e2\u0084\u0083", "\u00b0C")
+            .replace("\u00e2\u0084\u0089", "\u00b0F")
         )
         cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
@@ -1667,6 +2122,15 @@ class RAGEngine:
             else "Do not ask another question. If a reliable match cannot be made, say so "
             "and summarize only the closest result supported by the context."
         )
+        reliability_policy = (
+            "The question asks about reliability. Do not describe a product as reliable, "
+            "robust, proven, or more reliable unless the context contains independent field "
+            "reliability evidence. Warranty length, features, protections, installation rules, "
+            "and manufacturer claims are not such evidence. State plainly when the comparison "
+            "cannot establish which product is more reliable. "
+            if re.search(r"\breliab(?:le|ility)\b", question, re.I)
+            else ""
+        )
         try:
             response = self.openai.chat.completions.create(
                 model=settings.openai_chat_model,
@@ -1675,18 +2139,28 @@ class RAGEngine:
                     "content": (
                         "Verify the draft answer strictly against the supplied context. "
                         "Remove or correct every unsupported factual claim. Add the correct "
-                        "[Source N] citation to every retained factual product or service claim. "
+                        "[Source N] citation to every retained factual product or service claim, "
+                        "but group related claims into natural paragraphs and cite each supporting "
+                        "source once at the paragraph end when possible. Do not repeat the same "
+                        "citation after every sentence. "
                         "Preserve a friendly, natural, concise customer-support tone while editing. "
                         "Use direct wording and contractions where appropriate, and do not make the "
                         "answer sound like a report or mention documents unless the customer asks. "
+                        "Do not introduce a Markdown table unless the question explicitly requests "
+                        "one or several matching attributes truly require one for clarity. "
                         "Do not add outside knowledge. A source may "
                         "support claims only about the same named product or service described "
                         "in that source block. Return only the revised customer-facing answer. "
+                        "Remove products from a different category than the one requested, even "
+                        "if they share a brand or general topic. Never tell the customer to visit "
+                        "another dealer, marketplace, or manufacturer website; keep help within "
+                        "the available company catalog. Never ask the customer to supply this "
+                        "company's datasheet, manual, catalog record, or product specifications. "
                         "Silently remove unsupported material; never mention verification, the "
                         "draft, supplied context, unsupported claims, or what was removed. If the "
                         "draft asks concise clarification questions and makes no product "
                         "claims, preserve those questions only when clarification is allowed. "
-                        f"{verification_policy}\n\n"
+                        f"{reliability_policy}{verification_policy}\n\n"
                         f"Question:\n{question}\n\nContext:\n{context}\n\n"
                         f"Draft answer:\n{answer}\n\nVerified answer:"
                     ),
@@ -1732,6 +2206,9 @@ class RAGEngine:
                         "depend on a diagram, layout, or image. "
                         "For a request to list models, prioritize a chunk that explicitly says "
                         "models are included or available and preserves their exact model IDs. "
+                        "For a comparison, retain useful evidence for every named product even "
+                        "when each product is described in a separate chunk; do not require one "
+                        "chunk to contain the complete comparison. "
                         "For product or service recommendations, retain only chunks that describe "
                         "a candidate matching an explicit customer requirement. Return [] when no "
                         "chunk is directly relevant. "

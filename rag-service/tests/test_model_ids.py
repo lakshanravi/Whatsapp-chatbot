@@ -16,6 +16,45 @@ class ModelIdTests(unittest.TestCase):
             {"IC121040", "IC121040I"},
         )
 
+    def test_f3000_customer_aliases_resolve_to_manual_model(self):
+        self.assertEqual(normalize_model_id("PEC-F3000LFP"), "F3000LFP")
+        self.assertEqual(
+            extract_model_ids(
+                "What's the expected cycle life of this PEC-F3000LFP unit?"
+            ),
+            {"F3000LFP"},
+        )
+
+    def test_pecron_lfp_aliases_generalize_to_other_models(self):
+        self.assertEqual(normalize_model_id("PEC-F5000LFP"), "F5000LFP")
+        self.assertEqual(normalize_model_id("PECRON E1500 LFP"), "E1500LFP")
+        self.assertEqual(
+            extract_model_ids(
+                "PECRON_F5000_LFP_user_manual_100V_120V_V2-20260106.pdf"
+            ),
+            {"F5000LFP"},
+        )
+        self.assertEqual(
+            extract_model_ids("PECRON E3600 LFP Datasheet.pdf"),
+            {"E3600LFP"},
+        )
+
+    def test_pecron_vendor_prefix_is_removed_from_other_model_families(self):
+        self.assertEqual(normalize_model_id("PEC-EP3800-48V"), "EP380048V")
+        self.assertEqual(normalize_model_id("PECRON EP3000-48V"), "EP300048V")
+        self.assertEqual(
+            extract_model_ids(
+                "What battery chemistry does the PEC-EP3800-48V use?"
+            ),
+            {"EP380048V"},
+        )
+        self.assertEqual(
+            extract_model_ids(
+                "PECRON_F3000_LFP_user_manual_100V_120V_V2-20260310.pdf"
+            ),
+            {"F3000LFP"},
+        )
+
     def test_similar_models_remain_distinct(self):
         metadata = {"document_name": "IC121040I user manual.pdf"}
 
@@ -36,6 +75,22 @@ class ModelIdTests(unittest.TestCase):
         self.assertEqual(
             item_model_ids("For comparison, see IC121040.", metadata),
             {"IC121040I"},
+        )
+
+    def test_filename_repairs_incorrect_legacy_chunk_metadata(self):
+        metadata = {
+            "document_name": (
+                "PECRON_F3000_LFP_user_manual_100V_120V_V2-20260310.pdf"
+            ),
+            "model_ids": "XT60,XT120",
+        }
+
+        self.assertEqual(
+            item_model_ids(
+                "Cycle Life maintains over 80% capacity after 3500 cycles.",
+                metadata,
+            ),
+            {"F3000LFP"},
         )
 
     def test_error_and_certification_codes_are_not_models(self):

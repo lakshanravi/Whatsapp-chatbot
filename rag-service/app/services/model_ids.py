@@ -46,10 +46,38 @@ _SLASH_MODEL_CONTEXT = re.compile(
     re.I,
 )
 
+# Customer-facing/vendor-prefixed names and filenames sometimes use a longer
+# label than the model printed throughout the manual. Keep these aliases
+# explicit so a harmless vendor prefix cannot turn into a strict, nonexistent
+# model filter (for example PEC-F3000LFP versus F3000LFP).
+_MODEL_ALIASES = {
+    "PECF3000LFP": "F3000LFP",
+    "PECRONF3000LFP": "F3000LFP",
+}
+
+_PECRON_LFP_MODEL_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9])(?:PEC(?:RON)?[\s_-]*)?([EF]\d{4})[\s_-]*LFP"
+    r"(?![A-Za-z0-9])",
+    re.I,
+)
+
 
 def normalize_model_id(value: str) -> str:
     """Normalize display variations while preserving meaningful suffixes."""
-    return re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()
+    normalized = re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()
+    vendor_model = re.fullmatch(r"PEC(?:RON)?([EF]\d{4}LFP)", normalized)
+    if vendor_model:
+        return vendor_model.group(1)
+    # Customers often prepend PEC/PECRON to the actual printed model number.
+    # Strip that vendor qualifier generically when the remainder is itself a
+    # code-like identifier containing a digit (PEC-EP3800-48V -> EP380048V).
+    vendor_qualified = re.fullmatch(
+        r"PEC(?:RON)?([A-Z]{1,12}[A-Z0-9]*\d[A-Z0-9]*)",
+        normalized,
+    )
+    if vendor_qualified:
+        return vendor_qualified.group(1)
+    return _MODEL_ALIASES.get(normalized, normalized)
 
 
 def _extract_slash_model_ids(text: str) -> set[str]:
@@ -69,6 +97,10 @@ def extract_model_ids(text: str) -> set[str]:
     """Extract likely product IDs without treating error/spec codes as models."""
     found: set[str] = set()
     source = str(text or "")
+    found.update(
+        f"{match.group(1).upper()}LFP"
+        for match in _PECRON_LFP_MODEL_PATTERN.finditer(source)
+    )
     for match in _MODEL_PATTERN.finditer(source):
         raw_value = match.group(0)
         # In "MPPT 75/10", MPPT 75 is only a prefix of the slash-form model.
@@ -108,6 +140,13 @@ def deserialize_model_ids(value: object) -> set[str]:
 
 def item_model_ids(document: str, metadata: dict) -> set[str]:
     """Read persisted IDs, with a fallback for documents indexed before this fix."""
+    # A model-bearing filename is the strongest ownership signal. Prefer it
+    # even when a legacy index persisted connector names or voltage labels as
+    # chunk-level models. This repairs old metadata at query time and avoids an
+    # otherwise costly full reindex.
+    filename_ids = extract_model_ids(metadata.get("document_name", ""))
+    if filename_ids:
+        return filename_ids
     persisted = deserialize_model_ids(metadata.get("model_ids", ""))
     if persisted:
         # Augment old indexes with slash-form IDs discoverable in their raw
@@ -115,8 +154,7 @@ def item_model_ids(document: str, metadata: dict) -> set[str]:
         return persisted | _extract_slash_model_ids(document or "")
     # The filename identifies what the document belongs to. Mentions of other
     # models inside that document must not make it a source for those models.
-    filename_ids = extract_model_ids(metadata.get("document_name", ""))
-    return filename_ids or extract_model_ids(document or "")
+    return extract_model_ids(document or "")
 
 
 def matches_model_ids(document: str, metadata: dict, required: set[str]) -> bool:

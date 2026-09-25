@@ -514,6 +514,24 @@ python evals/run_regression.py
 
 Each regression question is sent with empty history so results cannot leak between products.
 
+### Fast lexical + intelligent retrieval
+
+The RAG service keeps the existing Chroma embeddings and automatically builds a
+SQLite FTS5 sidecar from the chunks already stored in Chroma. This does not
+reprocess PDFs, call the embeddings API, or replace the Chroma index. The default
+file is `rag-service/chroma_data/lexical_index.sqlite3`; set
+`FTS_PERSIST_PATH` to place it elsewhere.
+
+On the first query after enabling this version, the service copies existing chunk
+text and metadata into FTS5 once. Later queries use model-aware full-text search
+first and invoke semantic retrieval only as a bounded fallback. Simple factual
+questions skip LLM query planning, while comparisons, compatibility questions,
+recommendations, and troubleshooting can run up to four focused searches.
+
+If the Chroma collection changes through document upload, deletion, or active-state
+updates, the service invalidates the sidecar state and rebuilds it automatically
+from the current chunks on the next query. No embeddings are regenerated.
+
 ## Future phases
 
 - Voice call integration

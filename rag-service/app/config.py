@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_chat_model: str = "gpt-4o-mini"
     chroma_persist_dir: str = "./chroma_data"
+    fts_persist_path: str = ""
     chunk_size: int = 600
     chunk_overlap: int = 150
     embedding_batch_size: int = 128

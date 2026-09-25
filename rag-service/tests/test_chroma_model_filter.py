@@ -7,6 +7,72 @@ from app.services.pdf_processor import PdfChunk
 
 
 class ChromaModelFilterTests(unittest.TestCase):
+    def test_legacy_f3000_chunk_is_repaired_without_reindexing(self):
+        client = chromadb.EphemeralClient()
+        collection = client.create_collection("legacy_f3000_scope_test")
+        content = "Cycle Life maintains over 80% capacity after 3500 cycles."
+        collection.add(
+            ids=["legacy-cycle-life"],
+            embeddings=[[1.0, 0.0]],
+            documents=[content],
+            metadatas=[{
+                "document_id": "f3000-manual",
+                "document_name": (
+                    "PECRON_F3000_LFP_user_manual_100V_120V_V2-20260310.pdf"
+                ),
+                "page_number": 3,
+                "model_ids": "XT60,XT120",
+                "document_model_ids": "F3000LFP,XT60,XT120",
+                "model_scope": "explicit",
+                "is_active": True,
+            }],
+        )
+        store = ChromaStore.__new__(ChromaStore)
+        store._get_collection = lambda _company_id: collection
+        store._embed = lambda _texts: [[1.0, 0.0]]
+
+        results = store.hybrid_query(
+            "company",
+            "What's the expected cycle life of this PEC-F3000LFP unit?",
+            5,
+            required_model_ids={"F3000LFP"},
+        )
+
+        self.assertEqual([result["content"] for result in results], [content])
+        self.assertEqual(results[0]["model_ids"], ["F3000LFP"])
+
+    def test_f3000_filename_owns_cycle_life_chunk(self):
+        client = chromadb.EphemeralClient()
+        collection = client.create_collection("f3000_cycle_life_scope_test")
+        store = ChromaStore.__new__(ChromaStore)
+        store._get_collection = lambda _company_id: collection
+        store._embed = lambda texts: [[1.0, 0.0] for _text in texts]
+
+        content = (
+            "Battery specifications: Cycle Life maintains over 80% capacity "
+            "after 3500 cycles. XT60 input and XT120 battery expansion port."
+        )
+        store.add_document_chunks(
+            "company",
+            "f3000-manual",
+            "PECRON_F3000_LFP_user_manual_100V_120V_V2-20260310.pdf",
+            [PdfChunk(content=content, page_number=3)],
+        )
+
+        stored = collection.get(include=["documents", "metadatas"])
+        metadata = stored["metadatas"][0]
+        self.assertEqual(metadata["model_ids"], "F3000LFP")
+        self.assertEqual(metadata["document_model_ids"], "F3000LFP")
+        self.assertEqual(metadata["model_scope"], "document")
+
+        results = store.hybrid_query(
+            "company",
+            "What's the expected cycle life of this PEC-F3000LFP unit?",
+            5,
+            required_model_ids={"F3000LFP"},
+        )
+        self.assertEqual([result["content"] for result in results], [content])
+
     def test_add_document_chunks_returns_count_and_stores_raw_text(self):
         client = chromadb.EphemeralClient()
         collection = client.create_collection("ingest_return_test")

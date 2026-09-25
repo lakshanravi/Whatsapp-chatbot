@@ -1,11 +1,12 @@
 import os
+import tempfile
 
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 import chromadb
-import math
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
+from pathlib import Path
 from chromadb.config import Settings as ChromaSettings
 from openai import OpenAI
 
@@ -22,6 +23,7 @@ from app.services.product_names import (
     matches_product_names,
     serialize_product_names,
 )
+from app.services.fts_store import FTSStore
 
 
 class ChromaStore:
@@ -35,6 +37,43 @@ class ChromaStore:
             timeout=settings.openai_request_timeout_seconds,
             max_retries=settings.openai_max_retries,
         )
+        fts_path = settings.fts_persist_path or str(
+            Path(settings.chroma_persist_dir) / "lexical_index.sqlite3"
+        )
+        self.fts = FTSStore(fts_path)
+        self._fts_counts: dict[str, int] = {}
+
+    def _ensure_fts(self, company_id: str, collection) -> None:
+        if not hasattr(self, "fts"):
+            temporary_dir = tempfile.mkdtemp(prefix="rag-fts-test-")
+            self.fts = FTSStore(str(Path(temporary_dir) / "index.sqlite3"))
+        if not hasattr(self, "_fts_counts"):
+            self._fts_counts = {}
+        count = collection.count()
+        if self._fts_counts.get(company_id) == count:
+            return
+        if self.fts.has_count(company_id, count):
+            self._fts_counts[company_id] = count
+            return
+        id_data = collection.get(include=[])
+        ids = list(id_data.get("ids", []))
+        if not self.fts.is_current(company_id, ids):
+            data = collection.get(include=["documents", "metadatas"])
+            self.fts.rebuild(
+                company_id,
+                list(data.get("ids", [])),
+                list(data.get("documents", [])),
+                list(data.get("metadatas", [])),
+            )
+        self._fts_counts[company_id] = count
+
+    def _invalidate_fts(self, company_id: str) -> None:
+        if not hasattr(self, "fts"):
+            return
+        if not hasattr(self, "_fts_counts"):
+            self._fts_counts = {}
+        self._fts_counts.pop(company_id, None)
+        self.fts.invalidate(company_id)
 
     def _collection_name(self, company_id: str) -> str:
         safe_id = company_id.replace("-", "_")
@@ -269,6 +308,7 @@ class ChromaStore:
             )
         if stale_ids:
             collection.delete(ids=stale_ids)
+        self._invalidate_fts(company_id)
         return len(chunks)
 
     @staticmethod
@@ -292,6 +332,7 @@ class ChromaStore:
         existing = collection.get(where={"document_id": document_id})
         if existing["ids"]:
             collection.delete(ids=existing["ids"])
+            self._invalidate_fts(company_id)
 
     def set_document_active(
         self,
@@ -311,6 +352,7 @@ class ChromaStore:
             for metadata in existing["metadatas"]
         ]
         collection.update(ids=existing["ids"], metadatas=metadatas)
+        self._invalidate_fts(company_id)
 
     def query(
         self,
@@ -325,6 +367,7 @@ class ChromaStore:
         count = collection.count()
         if count == 0:
             return []
+        self._ensure_fts(company_id, collection)
 
         required = required_model_ids or set()
         required_products = required_product_names or set()
@@ -333,14 +376,19 @@ class ChromaStore:
         eligible_count = count
         model_catalogs: dict[str, set[str]] = {}
         if required or required_products or allowed_documents:
-            all_items = collection.get(include=["documents", "metadatas"])
+            lexical_seeds = self.fts.search(
+                company_id,
+                question,
+                max(200, top_k * 12),
+                allowed_document_ids=allowed_documents,
+                required_model_ids=required,
+                required_product_names=required_products,
+            )
             pairs = [
-                (doc, meta)
-                for doc, meta in zip(
-                    all_items.get("documents", []),
-                    all_items.get("metadatas", []),
-                )
-                if meta.get("document_id") and meta.get("is_active", True)
+                (item["content"], item["metadata"])
+                for item in lexical_seeds
+                if item["metadata"].get("document_id")
+                and item["metadata"].get("is_active", True)
             ]
             model_catalogs = self._document_model_catalogs(pairs)
             eligible_document_ids = {
@@ -361,22 +409,13 @@ class ChromaStore:
                     if (
                         item_model_ids(doc, meta) & required
                         or model_catalogs.get(meta.get("document_id", ""), set()) & required
+                        or extract_model_ids(meta.get("document_name", "")) & required
                     )
                 }
             eligible_document_ids = sorted(eligible_document_ids)
             if not eligible_document_ids:
                 return []
-            eligible_count = sum(
-                1
-                for doc, meta in pairs
-                if meta.get("document_id", "") in eligible_document_ids
-                and self._chunk_matches_required_model(
-                    doc,
-                    meta,
-                    required,
-                    model_catalogs.get(meta.get("document_id", ""), set()),
-                )
-            )
+            eligible_count = max(top_k * 4, len(pairs))
             document_filter = (
                 {"document_id": eligible_document_ids[0]}
                 if len(eligible_document_ids) == 1
@@ -463,82 +502,42 @@ class ChromaStore:
         required_product_names: set[str] | None = None,
         allowed_document_ids: set[str] | None = None,
     ) -> list[dict]:
-        """Combine semantic retrieval with exact-term matching."""
+        """Combine Chroma semantic retrieval with persistent FTS5 ranking."""
         collection = self._get_collection(company_id)
         count = collection.count()
         if count == 0:
             return []
+        self._ensure_fts(company_id, collection)
 
         required = required_model_ids or set()
         required_products = required_product_names or set()
         allowed_documents = allowed_document_ids or set()
-        semantic = self.query(
+        lexical_results = self.fts.search(
             company_id,
             question,
-            min(top_k, count),
+            max(top_k * 4, 40),
+            allowed_document_ids=allowed_documents,
             required_model_ids=required,
             required_product_names=required_products,
-            allowed_document_ids=allowed_documents,
         )
-        all_items = collection.get(include=["documents", "metadatas"])
-        all_pairs = list(zip(all_items["documents"], all_items["metadatas"]))
-        model_catalogs = self._document_model_catalogs(all_pairs)
-        product_document_ids = {
-            meta.get("document_id", "")
-            for doc, meta in all_pairs
-            if meta.get("is_active", True)
-            and matches_product_names(doc, meta, required_products)
-        }
-        eligible = [
-            (doc, meta)
-            for doc, meta in all_pairs
-            if meta.get("is_active", True)
-            and self._chunk_matches_required_model(
-                doc,
-                meta,
-                required,
-                model_catalogs.get(meta.get("document_id", ""), set()),
-            )
-            and (not allowed_documents or meta.get("document_id", "") in allowed_documents)
-            and (not required_products or meta.get("document_id", "") in product_document_ids)
+        lexical_pairs = [
+            (item["content"], item["metadata"])
+            for item in lexical_results
         ]
-        if not eligible:
-            return []
-        raw_documents = [doc for doc, _meta in eligible]
-        documents = [self._display_content(doc) for doc in raw_documents]
-        metadatas = [meta for _doc, meta in eligible]
-
-        tokenized = [self._tokens(doc) for doc in documents]
-        query_tokens = self._tokens(question)
-        average_length = (
-            sum(len(tokens) for tokens in tokenized) / len(tokenized)
-            if tokenized else 1.0
-        )
-        document_frequency = Counter()
-        for tokens in tokenized:
-            document_frequency.update(set(tokens))
-
-        bm25_results = []
-        k1, b = 1.5, 0.75
-        for index, tokens in enumerate(tokenized):
-            frequencies = Counter(tokens)
-            bm25_score = 0.0
-            for term in query_tokens:
-                frequency = frequencies.get(term, 0)
-                if not frequency:
-                    continue
-                frequency_in_docs = document_frequency[term]
-                idf = math.log(
-                    1 + (len(tokenized) - frequency_in_docs + 0.5)
-                    / (frequency_in_docs + 0.5)
-                )
-                denominator = frequency + k1 * (
-                    1 - b + b * len(tokens) / max(average_length, 1.0)
-                )
-                bm25_score += idf * frequency * (k1 + 1) / denominator
-            if bm25_score:
-                bm25_results.append((index, bm25_score))
-        bm25_results.sort(key=lambda item: item[1], reverse=True)
+        model_catalogs = self._document_model_catalogs(lexical_pairs)
+        # Exact lexical/model retrieval is both faster and safer for
+        # specifications. Use the embedding service only as a bounded fallback
+        # when lexical search cannot produce enough evidence.
+        semantic = []
+        if len(lexical_results) < min(3, top_k):
+            semantic = self.query(
+                company_id,
+                question,
+                min(top_k, count),
+                required_model_ids=required,
+                required_product_names=required_products,
+                allowed_document_ids=allowed_documents,
+            )
 
         # Reciprocal Rank Fusion is robust because vector and BM25 scores use
         # unrelated scales.
@@ -550,13 +549,29 @@ class ChromaStore:
             item["rank_score"] = 1.0 / (60 + rank)
             fused[key] = item
 
-        for rank, (index, raw_score) in enumerate(bm25_results[:top_k], 1):
-            doc, meta = documents[index], metadatas[index]
+        for rank, lexical in enumerate(lexical_results, 1):
+            raw_doc = lexical["content"]
+            doc = self._display_content(raw_doc)
+            meta = lexical["metadata"]
             if not meta.get("is_active", True):
                 continue
+            document_catalog = model_catalogs.get(
+                meta.get("document_id", ""),
+                deserialize_model_ids(meta.get("document_model_ids", "")),
+            )
+            if required and not (
+                self._chunk_matches_required_model(
+                    raw_doc, meta, required, document_catalog
+                )
+                or extract_model_ids(meta.get("document_name", "")) & required
+            ):
+                continue
+            if required_products and not matches_product_names(
+                raw_doc, meta, required_products
+            ):
+                continue
             key = (meta.get("document_id", ""), doc)
-            local_model_ids = item_model_ids(raw_documents[index], meta)
-            document_catalog = model_catalogs.get(meta.get("document_id", ""), set())
+            local_model_ids = item_model_ids(raw_doc, meta)
             item = fused.setdefault(
                 key,
                 {
@@ -572,11 +587,11 @@ class ChromaStore:
                     "model_scope": meta.get("model_scope") or (
                         "explicit" if local_model_ids else "shared"
                     ),
-                    "product_names": sorted(item_product_names(raw_documents[index], meta)),
+                    "product_names": sorted(item_product_names(raw_doc, meta)),
                     "evidence_type": meta.get("evidence_type", "text"),
                     "evidence_confidence": float(meta.get("evidence_confidence", 1.0)),
                     "content": doc,
-                    "score": min(0.7, raw_score / (raw_score + 1.0)),
+                    "score": max(0.45, min(0.7, 0.72 - rank * 0.005)),
                     "rank_score": 0.0,
                 },
             )
