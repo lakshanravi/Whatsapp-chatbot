@@ -33,7 +33,7 @@ async function receiveWebhook(req, res) {
 
 async function receiveStatus(req, res) {
   try {
-    const result = await smsService.updateMessageStatus(req.body);
+    const result = await smsService.updateMessageStatus(req.body, req);
 
     return res.status(200).json(result);
   } catch (err) {

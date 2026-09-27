@@ -7,6 +7,9 @@ const config = require("../config");
 const client = axios.create({
   baseURL: config.ragServiceUrl,
   timeout: Number(process.env.RAG_REQUEST_TIMEOUT_MS || 900000),
+  headers: config.ragServiceApiKey
+    ? { "X-RAG-Service-Key": config.ragServiceApiKey }
+    : {},
 });
 
 const ingestMaxAttempts = Number(process.env.RAG_INGEST_MAX_ATTEMPTS || 4);
@@ -46,6 +49,7 @@ function buildQueryCacheKey({
   preferredDocumentIds,
   preferredProductNames,
   preferredModelIds,
+  responseLanguage,
 }) {
   const historyText = (history || []).slice(-16).join("\n").toLowerCase();
   const historyKey = crypto.createHash("sha256").update(historyText).digest("hex");
@@ -58,6 +62,7 @@ function buildQueryCacheKey({
     preferredDocumentIds: [...new Set(preferredDocumentIds || [])].sort(),
     preferredProductNames: normalizedStrings(preferredProductNames).sort(),
     preferredModelIds: normalizedStrings(preferredModelIds).sort(),
+    responseLanguage: responseLanguage || "",
   });
 }
 
@@ -205,6 +210,7 @@ async function queryKnowledge({
   preferredDocumentIds,
   preferredProductNames,
   preferredModelIds,
+  responseLanguage,
 }) {
   const cacheKey = buildQueryCacheKey({
     companyId,
@@ -214,6 +220,7 @@ async function queryKnowledge({
     preferredDocumentIds,
     preferredProductNames,
     preferredModelIds,
+    responseLanguage,
   });
   const cached = queryCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
@@ -234,6 +241,7 @@ async function queryKnowledge({
     preferred_document_ids: preferredDocumentIds || [],
     preferred_product_names: preferredProductNames || [],
     preferred_model_ids: preferredModelIds || [],
+    response_language: responseLanguage || "",
   });
 
   rememberQuery(cacheKey, data, companyId);

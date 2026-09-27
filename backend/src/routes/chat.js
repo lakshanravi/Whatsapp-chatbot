@@ -10,8 +10,14 @@ const { preprocessUserMessage } = require("../services/messagePreprocessor");
 const { verifyGoogleIdToken } = require("../services/googleAuth");
 const { verifyExternalUserToken } = require("../services/externalUserAuth");
 const { canAccessCompany } = require("../middleware/auth");
+const { createRateLimit } = require("../middleware/rateLimit");
 
 const router = express.Router({ mergeParams: true });
+const widgetRateLimit = createRateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: "Too many chat requests. Please wait a moment.",
+});
 
 function isWidgetRequest(req) {
   return req.baseUrl?.startsWith("/widget/");
@@ -35,6 +41,10 @@ router.use((req, res, next) => {
   }
   next();
 });
+
+router.use((req, res, next) => (
+  isWidgetRequest(req) ? widgetRateLimit(req, res, next) : next()
+));
 
 router.use(canAccessCompany);
 

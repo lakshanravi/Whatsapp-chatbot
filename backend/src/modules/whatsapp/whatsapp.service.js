@@ -2,10 +2,8 @@ const axios = require("axios");
 
 const config = require("../../config");
 const Company = require("../../models/Company");
-const Conversation = require("../../models/Conversation");
 const WhatsAppIntegration = require("../../models/WhatsAppIntegration");
-const ragClient = require("../../services/ragClient");
-const { preprocessUserMessage } = require("../../services/messagePreprocessor");
+const { processCustomerMessage } = require("../../services/customerMessaging");
 
 function assertGraphConfig() {
   if (!config.graphApiVersion) {
@@ -39,17 +37,6 @@ function createEchoReply(incomingMessage) {
   }
 
   return `You said: ${incomingMessage.textBody || "[empty message]"}`;
-}
-
-function mapSources(sources) {
-  return (sources || []).map((source) => ({
-    documentId: source.document_id,
-    documentName: source.document_name,
-    content: source.content,
-    score: source.score,
-    pageNumber: source.page_number,
-    sectionHeading: source.section_heading || "",
-  }));
 }
 
 async function getCompany(companyId) {
@@ -124,76 +111,23 @@ async function createRagReply(incomingMessage) {
   const integration = await getIntegrationByPhoneNumberId(incomingMessage.phoneNumberId);
   const company = await getCompany(integration.companyId);
   const sessionId = `whatsapp:${incomingMessage.waId || incomingMessage.senderPhoneNumber}`;
-
-  let conversation = await Conversation.findOne({
+  const result = await processCustomerMessage({
     companyId: company._id,
     sessionId,
+    channel: "whatsapp",
+    text: question,
+    customer: {
+      name: incomingMessage.customerProfileName || "",
+      phone: incomingMessage.senderPhoneNumber || "",
+      externalId: incomingMessage.waId || incomingMessage.senderPhoneNumber || "",
+    },
   });
-
-  if (!conversation) {
-    conversation = new Conversation({
-      companyId: company._id,
-      sessionId,
-      customerName: incomingMessage.customerProfileName || "",
-      customerPhone: incomingMessage.senderPhoneNumber || "",
-      channel: "whatsapp",
-      messages: [],
-    });
-  } else {
-    if (incomingMessage.customerProfileName) {
-      conversation.customerName = incomingMessage.customerProfileName;
-    }
-    if (incomingMessage.senderPhoneNumber) {
-      conversation.customerPhone = incomingMessage.senderPhoneNumber;
-    }
-  }
-
-  conversation.messages.push({ role: "user", content: question });
-
-  const preprocessed = await preprocessUserMessage(question);
-
-  if (preprocessed.type === "small_talk") {
-    conversation.messages.push({
-      role: "assistant",
-      content: preprocessed.reply,
-    });
-    await conversation.save();
-
-    return {
-      answer: preprocessed.reply,
-      sources: [],
-      conversationId: conversation._id,
-      sessionId,
-      integration,
-    };
-  }
-
-  const ragContext = ragClient.buildConversationRagContext(
-    conversation.messages.slice(0, -1),
-    conversation.ragContext
-  );
-  const ragResult = await ragClient.queryKnowledge({
-    companyId: company._id.toString(),
-    question: preprocessed.question,
-    ...ragContext,
-  });
-
-  const sources = mapSources(ragResult.sources);
-  const answer = ragResult.answer || "I could not find an answer for that yet.";
-  ragClient.updateConversationRagContext(conversation, ragResult);
-
-  conversation.messages.push({
-    role: "assistant",
-    content: answer,
-    sources,
-  });
-
-  await conversation.save();
 
   return {
-    answer,
-    sources,
-    conversationId: conversation._id,
+    answer: result.answer,
+    sources: result.sources || [],
+    conversationId: result.conversation?._id,
+    orderId: result.order?._id,
     sessionId,
     integration,
   };

@@ -10,7 +10,11 @@ A multi-company RAG (Retrieval-Augmented Generation) customer support system. Ea
 - Web chat widget with guest mode, Google login, and website-account login
 - Persistent chat history for web, WhatsApp, and SMS users
 - WhatsApp Cloud API integration per company
+- Facebook Messenger Page integration per company
 - SMS chatbot integration through Twilio per company
+- Sinhala, English, and Tamil customer language preferences
+- Structured product catalogues and guided conversational ordering
+- Seller order dashboard with order status management
 - Small-talk handling and query rewriting before RAG search
 - Conversation storage in MongoDB
 - ChromaDB vector collections isolated per company
@@ -145,6 +149,7 @@ Add these values to `backend/.env`.
 | `PORT` | `3000` | Backend API port |
 | `MONGODB_URI` | `mongodb://localhost:27017/rag_chatbot` | MongoDB connection string |
 | `RAG_SERVICE_URL` | `http://localhost:8000` | Python RAG service URL |
+| `RAG_SERVICE_API_KEY` | long random shared secret | Authenticates backend requests to the RAG service; use the same value in both services |
 | `UPLOAD_DIR` | `./uploads` | Uploaded PDF storage folder |
 | `JWT_SECRET` | long random secret | Admin JWT signing secret and hashing salt |
 | `SUPER_ADMIN_EMAIL` | `admin@example.com` | Seeded superadmin email |
@@ -154,7 +159,11 @@ Add these values to `backend/.env`.
 | `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Model used for query rewrite / intent classification |
 | `GRAPH_API_VERSION` | `v20.0` | Meta Graph API version |
 | `WHATSAPP_VERIFY_TOKEN` | custom verify token | Used for Meta WhatsApp webhook verification |
+| `WHATSAPP_APP_SECRET` | Meta App Secret | Validates incoming WhatsApp webhook signatures |
 | `WHATSAPP_TOKEN_ENCRYPTION_KEY` | long random secret | Encrypts company WhatsApp access tokens |
+| `MESSENGER_VERIFY_TOKEN` | custom verify token | Used for Facebook Messenger webhook verification |
+| `MESSENGER_APP_SECRET` | Meta App Secret | Validates Messenger webhook signatures |
+| `MESSENGER_TOKEN_ENCRYPTION_KEY` | long random secret | Encrypts seller Page access tokens |
 | `SMS_TOKEN_ENCRYPTION_KEY` | long random secret | Encrypts company Twilio Auth Tokens |
 | `PUBLIC_BACKEND_URL` | `https://api.yourdomain.com` | Public backend URL shown in integration pages and used for callbacks |
 | `TWILIO_VALIDATE_WEBHOOK_SIGNATURE` | `true` | Enables Twilio webhook signature validation |
@@ -175,6 +184,7 @@ Add these values to `rag-service/.env`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | - | Required OpenAI key |
+| `RAG_SERVICE_API_KEY` | - | Required shared secret matching the backend value |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embeddings model |
 | `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Chat model |
 | `CHROMA_PERSIST_DIR` | `./chroma_data` | Vector DB path |
@@ -420,6 +430,23 @@ Incoming SMS messages are matched to a company by the Twilio `To` number. The co
 sms:<customerPhoneNumber>
 ```
 
+## Messenger and conversational ordering
+
+Each seller can connect one Facebook Page from the **Messenger Integration** screen. Configure the Meta callback URL as:
+
+```text
+GET/POST https://your-backend-domain.com/api/messenger/webhook
+```
+
+Subscribe the Page to `messages` and `messaging_postbacks`. Incoming WhatsApp and Messenger customers are first asked to choose Sinhala, English, or Tamil. Their preference is stored with the conversation and is passed to the RAG answer service.
+
+Sellers manage structured, orderable products from the **Products** screen. When a customer asks to order, the bot collects the product, variant, quantity, customer details, delivery address, payment method, and confirmation. Confirmed orders appear in the **Orders** screen with this workflow:
+
+```text
+new -> confirmed -> processing -> shipped -> delivered
+                                  \-> cancelled
+```
+
 ## API endpoints summary
 
 | Method | Endpoint | Description |
@@ -456,6 +483,13 @@ sms:<customerPhoneNumber>
 | `POST` | `/api/sms/webhook` | Receive Twilio inbound SMS |
 | `POST` | `/api/sms/status` | Receive Twilio message status callback |
 | `POST` | `/api/sms/send` | Send SMS text message |
+| `GET/POST/PUT/DELETE` | `/api/companies/:id/messenger-integration` | Manage seller Messenger connection |
+| `POST` | `/api/companies/:id/messenger-integration/validate` | Validate the connected Facebook Page |
+| `GET/POST/PUT/DELETE` | `/api/companies/:id/products` | Manage the seller product catalogue |
+| `GET` | `/api/companies/:id/orders` | List and filter seller orders |
+| `GET` | `/api/companies/:id/orders/summary` | Order dashboard counts and value |
+| `PATCH` | `/api/companies/:id/orders/:orderId/status` | Update an order status |
+| `GET/POST` | `/api/messenger/webhook` | Verify and receive Messenger events |
 
 ## Python RAG service endpoints
 

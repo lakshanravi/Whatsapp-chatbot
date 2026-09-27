@@ -8,11 +8,15 @@ import {
   History,
   Loader2,
   MessageSquare,
+  MessagesSquare,
+  Package,
   Pencil,
   Plus,
   RefreshCcw,
   Search,
   Send,
+  SlidersHorizontal,
+  ShoppingCart,
   Trash2,
   Upload,
   Users,
@@ -21,6 +25,8 @@ import {
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AdminShell } from "./components/AdminShell";
 import { LoginPage } from "./components/LoginPage";
+import { CommercePanel } from "./components/CommercePanel";
+import { DashboardOverview } from "./components/DashboardOverview";
 import {
   Field,
   IconButton,
@@ -202,26 +208,34 @@ export default function App() {
   const navItems = isSuperAdmin
     ? [
         { id: "dashboard", label: "Dashboard", icon: Activity },
-        { id: "companies", label: "Company Management", icon: Building2 },
-        { id: "admins", label: "Admin Management", icon: Users },
+        { id: "companies", label: "Businesses", icon: Building2 },
+        { id: "admins", label: "Team access", icon: Users },
         { id: "backups", label: "Backup & Restore", icon: Download },
       ]
     : [
         { id: "dashboard", label: "Dashboard", icon: Activity },
-        { id: "documents", label: "Document Management", icon: FileText },
-        { id: "whatsapp", label: "WhatsApp Integration", icon: MessageSquare },
-        { id: "sms", label: "SMS Integration", icon: MessageSquare },
-        { id: "history", label: "Chat History", icon: History },
-        { id: "help", label: "Widget Help", icon: Search },
+        { id: "orders", label: "Orders", icon: ShoppingCart },
+        { id: "products", label: "Catalogue", icon: Package },
+        { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
+        { id: "messenger", label: "Messenger", icon: MessagesSquare },
+        { id: "sms", label: "SMS", icon: MessageSquare },
+        { id: "documents", label: "Knowledge base", icon: FileText },
+        { id: "history", label: "Conversations", icon: History },
+        { id: "settings", label: "Business settings", icon: SlidersHorizontal },
+        { id: "help", label: "Website assistant", icon: Search },
       ];
   const companyDashboardNav = [
-    { id: "dashboard", label: "Company Dashboard", icon: Activity },
-    { id: "documents", label: "Document Management", icon: FileText },
-    { id: "whatsapp", label: "WhatsApp Integration", icon: MessageSquare },
-    { id: "sms", label: "SMS Integration", icon: MessageSquare },
-    { id: "chat", label: "Chat Test", icon: MessageSquare },
-    { id: "history", label: "Chat History", icon: History },
-    { id: "help", label: "Widget Help", icon: Search },
+    { id: "dashboard", label: "Overview", icon: Activity },
+    { id: "orders", label: "Orders", icon: ShoppingCart },
+    { id: "products", label: "Catalogue", icon: Package },
+    { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
+    { id: "messenger", label: "Messenger", icon: MessagesSquare },
+    { id: "sms", label: "SMS", icon: MessageSquare },
+    { id: "documents", label: "Knowledge base", icon: FileText },
+    { id: "chat", label: "Test assistant", icon: MessageSquare },
+    { id: "history", label: "Conversations", icon: History },
+    { id: "settings", label: "Business settings", icon: SlidersHorizontal },
+    { id: "help", label: "Website assistant", icon: Search },
   ];
   const activeNavItems = isSuperAdmin && selectedCompany ? companyDashboardNav : navItems;
   const adminGroups = useMemo(() => {
@@ -256,21 +270,17 @@ export default function App() {
   }, [activeSection, isSuperAdmin]);
 
   async function runTask(key, task, successMessage = "") {
-    console.log("[task] start", key);
     setLoading((current) => ({ ...current, [key]: true }));
     setError("");
     setNotice("");
     try {
       const result = await task();
-      console.log("[task] success", key, result);
       if (successMessage) setNotice(successMessage);
       return result;
     } catch (err) {
-      console.error("[task] error", key, err);
       setError(err.message || "Something went wrong");
       return null;
     } finally {
-      console.log("[task] finish", key);
       setLoading((current) => ({ ...current, [key]: false }));
     }
   }
@@ -439,16 +449,9 @@ export default function App() {
 
   async function handleLogin(event) {
     event.preventDefault();
-    console.log("[login] submit clicked", {
-      email: loginForm.email,
-      passwordLength: loginForm.password.length,
-      apiBaseUrl: api.baseUrl,
-    });
     const result = await runTask("auth", () => api.auth.login(loginForm), "Signed in");
-    console.log("[login] result", result);
     if (result) {
       setAuthToken(result.token);
-      console.log("[login] token saved, user set", result.user);
       setCurrentUser(result.user);
       setSelectedId(result.user.role === "company_admin" ? String(result.user.companyId) : "");
     }
@@ -1379,7 +1382,7 @@ ${widgetScriptSrc()}`;
       try {
         fileHandle = await window.showSaveFilePicker({
           suggestedName,
-          types: [{ description: "RAG System backup", accept: { "application/zip": [".zip"] } }],
+          types: [{ description: "Commerce Assistant backup", accept: { "application/zip": [".zip"] } }],
         });
       } catch (error) {
         setBackupProgress(null);
@@ -1472,11 +1475,11 @@ ${widgetScriptSrc()}`;
 
       {showCompanyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-950/40">
-          <section className="w-full max-w-lg bg-white border rounded shadow-xl border-slate-200">
+          <section className="w-full max-w-lg overflow-hidden bg-white border shadow-2xl rounded-2xl border-slate-200">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <Plus size={18} />
-                <h2 className="font-semibold text-slate-950">Add Company</h2>
+                <h2 className="font-semibold text-slate-950">Add seller business</h2>
               </div>
               <IconButton title="Close" onClick={() => setShowCompanyModal(false)}>
                 <XCircle size={16} />
@@ -1489,7 +1492,7 @@ ${widgetScriptSrc()}`;
                   onChange={(event) =>
                     setCompanyForm((current) => ({ ...current, name: event.target.value }))
                   }
-                  placeholder="Acme Support"
+                  placeholder="Acme Store"
                   required
                 />
               </Field>
@@ -1499,7 +1502,7 @@ ${widgetScriptSrc()}`;
                   onChange={(event) =>
                     setCompanyForm((current) => ({ ...current, slug: event.target.value }))
                   }
-                  placeholder="acme-support"
+                  placeholder="acme-store"
                 />
               </Field>
               <Field label="Description">
@@ -1755,7 +1758,7 @@ ${widgetScriptSrc()}`;
           {(notice || error) && (
             <div
               className={classNames(
-                "rounded border px-4 py-3 text-sm",
+                    "rounded-xl border px-4 py-3 text-sm shadow-sm",
                 error
                   ? "border-rose-200 bg-rose-50 text-rose-700"
                   : "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -1772,26 +1775,26 @@ ${widgetScriptSrc()}`;
             <>
               {activeSection === "dashboard" && (
                 <section className="grid gap-4 md:grid-cols-3">
-                  <div className="p-4 bg-white border rounded border-slate-200">
-                    <div className="text-sm font-semibold text-slate-500">Companies</div>
-                    <div className="mt-2 text-3xl font-bold text-slate-950">{companies.length}</div>
+                  <div className="p-5 bg-white border shadow-sm rounded-2xl border-slate-200">
+                    <div className="text-sm font-semibold text-slate-500">Seller businesses</div>
+                    <div className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{companies.length}</div>
                   </div>
-                  <div className="p-4 bg-white border rounded border-slate-200">
+                  <div className="p-5 bg-white border shadow-sm rounded-2xl border-slate-200">
                     <div className="text-sm font-semibold text-slate-500">Admins</div>
-                    <div className="mt-2 text-3xl font-bold text-slate-950">{adminUsers.length}</div>
+                    <div className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{adminUsers.length}</div>
                   </div>
-                  <div className="p-4 bg-white border rounded border-slate-200">
-                    <div className="text-sm font-semibold text-slate-500">Backend</div>
+                  <div className="p-5 bg-white border shadow-sm rounded-2xl border-slate-200">
+                    <div className="text-sm font-semibold text-slate-500">Platform health</div>
                     <div className="mt-2"><StatusBadge status={health?.mongodb || "unknown"} /></div>
                   </div>
                 </section>
               )}
               {activeSection === "dashboard" && (
-                <section className="bg-white border rounded border-slate-200">
+                <section className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
                     <div className="flex items-center gap-2">
                       <Building2 size={18} />
-                      <h2 className="font-semibold text-slate-950">Companies</h2>
+                      <h2 className="font-semibold text-slate-950">Seller businesses</h2>
                     </div>
                     <SecondaryButton onClick={() => setActiveSection("companies")}>
                       <Plus size={16} />
@@ -1804,7 +1807,7 @@ ${widgetScriptSrc()}`;
                         type="button"
                         key={company._id}
                         onClick={() => openCompanyDashboard(company._id)}
-                        className="p-4 text-left transition bg-white border rounded border-slate-200 hover:border-slate-400 hover:shadow-sm"
+                        className="p-4 text-left transition bg-white border rounded-xl border-slate-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -1822,11 +1825,11 @@ ${widgetScriptSrc()}`;
                 </section>
               )}
               {activeSection === "companies" && (
-                <section className="bg-white border rounded border-slate-200">
+                <section className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
                   <div className="flex flex-col gap-3 px-4 py-3 border-b border-slate-200 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-2">
                       <Building2 size={18} />
-                      <h2 className="font-semibold text-slate-950">Company Management</h2>
+                      <h2 className="font-semibold text-slate-950">Seller businesses</h2>
                     </div>
                     <div className="flex gap-2">
                       <IconButton title="Refresh companies" onClick={loadCompanies}>
@@ -1834,7 +1837,7 @@ ${widgetScriptSrc()}`;
                       </IconButton>
                       <PrimaryButton onClick={() => setShowCompanyModal(true)}>
                         <Plus size={16} />
-                        Add Company
+                        Add business
                       </PrimaryButton>
                     </div>
                   </div>
@@ -1887,25 +1890,19 @@ ${widgetScriptSrc()}`;
           ) : (
             <>
               {activeSection === "dashboard" && (
-                <section className="grid gap-4 md:grid-cols-3">
-                  <div className="p-4 bg-white border rounded border-slate-200">
-                    <div className="text-sm font-semibold text-slate-500">Companies</div>
-                    <div className="mt-2 text-3xl font-bold text-slate-950">
-                      {isSuperAdmin ? companies.length : 1}
-                    </div>
-                  </div>
-                  <div className="p-4 bg-white border rounded border-slate-200">
-                    <div className="text-sm font-semibold text-slate-500">Documents</div>
-                    <div className="mt-2 text-3xl font-bold text-slate-950">{documents.length}</div>
-                  </div>
-                  <div className="p-4 bg-white border rounded border-slate-200">
-                    <div className="text-sm font-semibold text-slate-500">Conversations</div>
-                    <div className="mt-2 text-3xl font-bold text-slate-950">{conversations.length}</div>
-                  </div>
-                </section>
+                <DashboardOverview
+                  company={selectedCompany}
+                  documents={documents}
+                  conversations={conversations}
+                  setActiveSection={setActiveSection}
+                />
               )}
 
-              {(activeSection === "dashboard" || activeSection === "companies") && (
+              {["products", "orders", "messenger"].includes(activeSection) && (
+                <CommercePanel companyId={selectedCompany._id} section={activeSection} />
+              )}
+
+              {(activeSection === "settings" || activeSection === "companies") && (
               <section className="p-4 bg-white border rounded border-slate-200">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -3153,7 +3150,7 @@ ${widgetScriptSrc()}`;
                           Generate widget API key
                         </div>
                         <p className="mt-1 text-sm text-slate-600">
-                          Go to Company Dashboard and click Generate / Rotate. Copy the key when it appears.
+                          Open Business settings and click Generate / Rotate. Copy the key when it appears.
                         </p>
                       </div>
                       <div className="p-4 border rounded border-slate-200 bg-slate-50">
@@ -3162,8 +3159,8 @@ ${widgetScriptSrc()}`;
                           Build and host widget file
                         </div>
                         <pre className="p-3 mt-2 overflow-x-auto text-xs text-white rounded bg-slate-900">
-{`cd C:\\Users\\Rashen\\Desktop\\github\\RAG-System\\frontend
-npm.cmd run build:widget`}
+{`cd frontend
+npm run build:widget`}
                         </pre>
                         <p className="mt-2 text-sm text-slate-600">
                           Upload `dist-widget/rag-chat-widget.iife.js` to your server, CDN, or static hosting.
@@ -3184,7 +3181,7 @@ npm.cmd run build:widget`}
                           Test from this dashboard
                         </div>
                         <p className="mt-1 text-sm text-slate-600">
-                          Paste the API key into Company Dashboard, then click Test Widget to open the real chatbot widget and send test messages.
+                          Paste the API key into Business settings, then click Test Widget to open the assistant and send a test message.
                         </p>
                       </div>
                     </div>

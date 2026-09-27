@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import zipfile
+import secrets
 from pathlib import Path
 
 import chromadb
@@ -43,6 +44,22 @@ app.add_middleware(
 
 engine = RAGEngine()
 engine_lock = threading.RLock()
+
+
+@app.middleware("http")
+async def require_service_key(request: Request, call_next):
+    if request.url.path == "/health":
+        return await call_next(request)
+    expected = settings.rag_service_api_key
+    provided = request.headers.get("x-rag-service-key", "")
+    if not expected:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "RAG_SERVICE_API_KEY is not configured"},
+        )
+    if not provided or not secrets.compare_digest(provided, expected):
+        return JSONResponse(status_code=401, content={"detail": "Invalid service key"})
+    return await call_next(request)
 
 
 def _remove_file(path: str) -> None:
@@ -265,6 +282,7 @@ def query_knowledge(request: QueryRequest):
                 preferred_document_ids=request.preferred_document_ids,
                 preferred_product_names=request.preferred_product_names,
                 preferred_model_ids=request.preferred_model_ids,
+                response_language=request.response_language,
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")

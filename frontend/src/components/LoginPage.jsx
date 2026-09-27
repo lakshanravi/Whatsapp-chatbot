@@ -1,139 +1,121 @@
-import { Bot, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
-import { api } from "../lib/api";
+import {
+  ArrowRight,
+  Languages,
+  LockKeyhole,
+  MessageCircleMore,
+  PackageCheck,
+  ShieldCheck,
+  ShoppingBag,
+} from "lucide-react";
 import { PrimaryButton } from "./ui";
+
+const features = [
+  { icon: MessageCircleMore, label: "WhatsApp & Messenger", detail: "One inbox-ready assistant" },
+  { icon: Languages, label: "Three languages", detail: "Sinhala, English and Tamil" },
+  { icon: PackageCheck, label: "Orders that stay organized", detail: "From chat to fulfilment" },
+];
 
 export function LoginPage({ loginForm, setLoginForm, loading, error, handleLogin }) {
   return (
-    <main className="flex min-h-screen bg-slate-950 text-slate-950">
-      <section className="hidden min-h-screen w-[46%] flex-col justify-between bg-slate-950 px-10 py-10 text-white lg:flex">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-slate-950">
-            <Bot size={23} />
-          </div>
-          <div>
-            <div className="text-lg font-bold">RAG System</div>
-            <div className="text-sm text-slate-300">Knowledge support console</div>
-          </div>
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-[#07111f] text-slate-950">
+      <div className="pointer-events-none absolute inset-0 opacity-80 commerce-login-grid" />
+      <div className="pointer-events-none absolute -left-32 top-20 h-96 w-96 rounded-full bg-emerald-400/15 blur-3xl" />
+      <div className="pointer-events-none absolute -right-32 bottom-0 h-[30rem] w-[30rem] rounded-full bg-cyan-400/10 blur-3xl" />
 
-        <div className="max-w-lg">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200 shadow-sm">
-            <ShieldCheck size={15} />
-            Secure admin access
-          </div>
-          <h1 className="text-5xl font-bold leading-tight tracking-normal text-white">
-            Manage documents, channels, and customer answers in one place.
-          </h1>
-          <p className="mt-5 text-base leading-7 text-slate-300">
-            Sign in to monitor company knowledge bases, upload PDFs, manage integrations, and test chat responses.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 text-sm">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <div className="text-2xl font-bold">PDF</div>
-            <div className="mt-1 text-slate-300">Knowledge ingest</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <div className="text-2xl font-bold">RAG</div>
-            <div className="mt-1 text-slate-300">Grounded answers</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <div className="text-2xl font-bold">API</div>
-            <div className="mt-1 text-slate-300">Widget ready</div>
-          </div>
-        </div>
-      </section>
-
-      <section className="flex min-h-screen flex-1 items-center justify-center bg-slate-100 px-4 py-10">
-        <div className="w-full max-w-md">
-          <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white">
-              <Bot size={21} />
+      <div className="relative mx-auto grid min-h-screen max-w-[1500px] lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="flex flex-col justify-between px-6 py-7 text-white sm:px-10 lg:px-16 lg:py-10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-300 to-cyan-400 text-[#07111f] shadow-lg shadow-emerald-500/20">
+              <ShoppingBag size={22} strokeWidth={2.4} />
             </div>
             <div>
-              <div className="font-bold text-slate-950">RAG System</div>
-              <div className="text-sm text-slate-500">Admin console</div>
+              <div className="text-base font-bold tracking-tight">Commerce Assistant</div>
+              <div className="text-xs font-medium text-slate-400">Conversational selling workspace</div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/40">
-            <div className="mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-950 text-white">
-                <LockKeyhole size={22} />
+          <div className="my-16 max-w-2xl lg:my-10">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs font-semibold text-emerald-200">
+              <ShieldCheck size={14} />
+              Built for modern seller operations
+            </div>
+            <h1 className="max-w-xl text-4xl font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-5xl lg:text-[3.65rem]">
+              Turn every customer conversation into an opportunity.
+            </h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+              Manage products, automate multilingual support, and fulfil orders from WhatsApp and Messenger—all from one calm, focused workspace.
+            </p>
+
+            <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
+              {features.map(({ icon: Icon, label, detail }) => (
+                <div key={label} className="rounded-xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-sm">
+                  <Icon className="text-emerald-300" size={20} />
+                  <div className="mt-4 text-sm font-semibold text-white">{label}</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-400">{detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="hidden text-xs text-slate-500 lg:block">Secure seller access · Encrypted channel credentials</p>
+        </section>
+
+        <section className="flex items-center justify-center px-5 pb-10 sm:px-10 lg:py-10">
+          <div className="w-full max-w-[470px] rounded-2xl border border-white/70 bg-white/95 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-9">
+            <div className="mb-8">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                <LockKeyhole size={21} />
               </div>
-              <h2 className="mt-4 text-2xl font-bold text-slate-950">Sign in</h2>
-              <p className="mt-1 text-sm text-slate-500">Use your admin account to continue securely.</p>
+              <h2 className="mt-5 text-2xl font-bold tracking-tight text-slate-950">Welcome back</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">Sign in to manage your store conversations and orders.</p>
             </div>
 
             {error && (
-              <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              <div className="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {error}
               </div>
             )}
 
-            <form className="space-y-4" onSubmit={handleLogin}>
+            <form className="space-y-5" onSubmit={handleLogin}>
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Email
-                </span>
-                <span className="relative block">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-                  <input
-                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                    type="email"
-                    value={loginForm.email}
-                    onChange={(event) =>
-                      setLoginForm((current) => ({ ...current, email: event.target.value }))
-                    }
-                    placeholder="you@company.com"
-                    autoComplete="email"
-                    required
-                  />
-                </span>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Email address</span>
+                <input
+                  className="h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                  type="email"
+                  value={loginForm.email}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
+                  placeholder="you@company.com"
+                  autoComplete="email"
+                  required
+                />
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Password
-                </span>
-                <span className="relative block">
-                  <LockKeyhole
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    size={17}
-                  />
-                  <input
-                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(event) =>
-                      setLoginForm((current) => ({ ...current, password: event.target.value }))
-                    }
-                    placeholder="Enter password"
-                    autoComplete="current-password"
-                    required
-                  />
-                </span>
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Password</span>
+                <input
+                  className="h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                />
               </label>
 
-              <PrimaryButton type="submit" className="h-11 w-full" disabled={loading.auth}>
-                {loading.auth ? "Signing in..." : "Sign in"}
+              <PrimaryButton type="submit" className="h-12 w-full rounded-lg" disabled={loading.auth}>
+                {loading.auth ? "Signing in…" : "Sign in to workspace"}
+                {!loading.auth && <ArrowRight size={17} />}
               </PrimaryButton>
             </form>
 
-            <div className="mt-5 grid gap-2 rounded-md bg-slate-50 px-3 py-3 text-xs text-slate-500">
-              <div className="flex items-center justify-between gap-3">
-                <span>API endpoint</span>
-                <span className="truncate font-medium text-slate-700">{api.baseUrl}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span>Session</span>
-                <span className="font-medium text-slate-700">Token protected</span>
-              </div>
+            <div className="mt-7 flex items-center justify-center gap-2 border-t border-slate-100 pt-5 text-xs text-slate-400">
+              <ShieldCheck size={14} />
+              Protected administrative access
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   );
 }

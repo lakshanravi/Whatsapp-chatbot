@@ -57,7 +57,7 @@ const conversationSchema = new mongoose.Schema(
     customerAuthProvider: { type: String, default: "", index: true },
     channel: {
       type: String,
-      enum: ["web", "sms", "voice", "whatsapp"],
+      enum: ["web", "sms", "voice", "whatsapp", "messenger"],
       default: "web",
     },
     messages: {
@@ -68,6 +68,17 @@ const conversationSchema = new mongoose.Schema(
       productNames: { type: [String], default: [] },
       modelIds: { type: [String], default: [] },
       documentIds: { type: [String], default: [] },
+    },
+    preferredLanguage: {
+      type: String,
+      enum: ["", "en", "si", "ta"],
+      default: "",
+      index: true,
+    },
+    commerceState: {
+      stage: { type: String, default: "browsing" },
+      draft: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+      updatedAt: { type: Date, default: Date.now },
     },
   },
   { timestamps: true }

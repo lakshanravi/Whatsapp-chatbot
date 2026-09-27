@@ -30,6 +30,7 @@ class QueryRequest(BaseModel):
     preferred_document_ids: list[str] = Field(default_factory=list)
     preferred_product_names: list[str] = Field(default_factory=list)
     preferred_model_ids: list[str] = Field(default_factory=list)
+    response_language: str = Field(default="", pattern="^(|en|si|ta)$")
 
 
 class SourceChunk(BaseModel):

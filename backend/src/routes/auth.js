@@ -2,10 +2,17 @@ const express = require("express");
 const AdminUser = require("../models/AdminUser");
 const { createToken } = require("../services/auth");
 const { requireAuth } = require("../middleware/auth");
+const { createRateLimit } = require("../middleware/rateLimit");
 
 const router = express.Router();
 
-router.post("/login", async (req, res) => {
+const loginRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Too many login attempts. Try again later.",
+});
+
+router.post("/login", loginRateLimit, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {

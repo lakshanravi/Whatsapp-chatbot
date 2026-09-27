@@ -5,6 +5,7 @@ const Company = require("../../models/Company");
 const Conversation = require("../../models/Conversation");
 const SmsIntegration = require("../../models/SmsIntegration");
 const SmsMessageLog = require("../../models/SmsMessageLog");
+const WebhookEvent = require("../../models/WebhookEvent");
 const ragClient = require("../../services/ragClient");
 const { preprocessUserMessage } = require("../../services/messagePreprocessor");
 
@@ -175,6 +176,14 @@ async function sendTextMessage({ to, text, companyId, integration, conversationI
 async function replyToIncomingMessage(incomingMessage, req) {
   const integration = await getIntegrationByPhoneNumber(incomingMessage.receiverPhoneNumber);
   if (req) validateTwilioWebhook(req, integration);
+  if (incomingMessage.smsMessageId) {
+    try {
+      await WebhookEvent.create({ provider: "sms", eventId: incomingMessage.smsMessageId });
+    } catch (error) {
+      if (error.code === 11000) return { provider: "twilio", duplicate: true };
+      throw error;
+    }
+  }
   const reply = await createRagReply(incomingMessage);
   const result = await sendTextMessage({ to: incomingMessage.senderPhoneNumber, text: reply.answer, integration: reply.integration, conversationId: reply.conversationId });
   return { provider: "twilio", messageSid: result.sid, status: result.status, answer: reply.answer, conversationId: reply.conversationId, sessionId: reply.sessionId };
@@ -200,9 +209,15 @@ async function validateIntegration({ companyId }) {
   }
 }
 
-async function updateMessageStatus(payload) {
+async function updateMessageStatus(payload, req) {
   const twilioMessageSid = payload.MessageSid || payload.SmsSid || payload.MessageSID;
   if (!twilioMessageSid) return { status: "ignored", reason: "missing MessageSid" };
+  const existing = await SmsMessageLog.findOne({ twilioMessageSid });
+  if (!existing) return { status: "not_found", twilioMessageSid };
+  const integration = await SmsIntegration.findById(existing.smsIntegrationId)
+    .select("+encryptedAuthToken +authTokenIv +authTokenAuthTag");
+  if (!integration) throw new Error("SMS integration not found for status callback");
+  if (req) validateTwilioWebhook(req, integration);
   const update = { status: payload.MessageStatus || payload.SmsStatus || payload.status || "unknown", errorCode: payload.ErrorCode || "", errorMessage: payload.ErrorMessage || "", rawPayload: payload };
   const log = await SmsMessageLog.findOneAndUpdate({ twilioMessageSid }, { $set: update }, { new: true });
   return { status: log ? "updated" : "not_found", twilioMessageSid, messageStatus: update.status };

@@ -8,7 +8,7 @@ const dns = require("dns");
 const config = require("./config");
 const ragClient = require("./services/ragClient");
 const AdminUser = require("./models/AdminUser");
-const { requireAuth } = require("./middleware/auth");
+const { requireAuth, canAccessCompany } = require("./middleware/auth");
 const authRouter = require("./routes/auth");
 const adminUsersRouter = require("./routes/adminUsers");
 const companiesRouter = require("./routes/companies");
@@ -19,6 +19,10 @@ const smsIntegrationsRouter = require("./routes/smsIntegrations");
 const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
 const smsRoutes = require("./modules/sms/sms.routes");
 const backupsRouter = require("./routes/backups");
+const productsRouter = require("./routes/products");
+const ordersRouter = require("./routes/orders");
+const messengerIntegrationsRouter = require("./routes/messengerIntegrations");
+const messengerRoutes = require("./modules/messenger/messenger.routes");
 
 const app = express();
 
@@ -27,7 +31,12 @@ dns.setDefaultResultOrder("ipv4first");
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  limit: "1mb",
+  verify: (req, _res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/health", async (_req, res) => {
@@ -54,10 +63,14 @@ app.use("/api/companies", requireAuth, companiesRouter);
 app.use("/api/companies/:companyId/documents", requireAuth, documentsRouter);
 app.use("/api/companies/:companyId/chat", requireAuth, chatRouter);
 app.use("/widget/companies/:companyId/chat", chatRouter);
-app.use("/api/companies/:companyId/whatsapp-integration", whatsappIntegrationsRouter);
-app.use("/api/companies/:companyId/sms-integration", requireAuth, smsIntegrationsRouter);
+app.use("/api/companies/:companyId/whatsapp-integration", requireAuth, canAccessCompany, whatsappIntegrationsRouter);
+app.use("/api/companies/:companyId/sms-integration", requireAuth, canAccessCompany, smsIntegrationsRouter);
+app.use("/api/companies/:companyId/messenger-integration", requireAuth, messengerIntegrationsRouter);
+app.use("/api/companies/:companyId/products", requireAuth, productsRouter);
+app.use("/api/companies/:companyId/orders", requireAuth, ordersRouter);
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/sms", smsRoutes);
+app.use("/api/messenger", messengerRoutes);
 
 app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) {
@@ -74,6 +87,7 @@ app.use((err, _req, res, _next) => {
 
 async function start() {
   try {
+    config.validateForStartup();
     await mongoose.connect(config.mongodbUri, {
       serverSelectionTimeoutMS: 30000,
     });

@@ -15,23 +15,11 @@ export function getAuthToken() {
 async function request(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
-  console.log("[api] request", {
-    method: options.method || "GET",
-    path,
-    hasToken: Boolean(authToken),
-  });
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json")
     ? await response.json()
     : await response.text();
-
-  console.log("[api] response", {
-    path,
-    status: response.status,
-    ok: response.ok,
-    data,
-  });
 
   if (!response.ok) {
     const message = typeof data === "string"
@@ -204,6 +192,51 @@ export const api = {
     remove: (companyId) =>
       request(`/api/companies/${companyId}/sms-integration`, {
         method: "DELETE",
+      }),
+  },
+  messengerIntegration: {
+    get: (companyId) => request(`/api/companies/${companyId}/messenger-integration`),
+    save: (companyId, payload, hasExisting) =>
+      request(`/api/companies/${companyId}/messenger-integration`, {
+        method: hasExisting ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    validate: (companyId) =>
+      request(`/api/companies/${companyId}/messenger-integration/validate`, { method: "POST" }),
+    remove: (companyId) =>
+      request(`/api/companies/${companyId}/messenger-integration`, { method: "DELETE" }),
+  },
+  products: {
+    list: (companyId) => request(`/api/companies/${companyId}/products`),
+    create: (companyId, payload) =>
+      request(`/api/companies/${companyId}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    update: (companyId, productId, payload) =>
+      request(`/api/companies/${companyId}/products/${productId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    remove: (companyId, productId) =>
+      request(`/api/companies/${companyId}/products/${productId}`, { method: "DELETE" }),
+  },
+  orders: {
+    list: (companyId, filters = {}) => {
+      const query = new URLSearchParams(
+        Object.entries(filters).filter(([, value]) => value !== "" && value !== undefined)
+      );
+      return request(`/api/companies/${companyId}/orders?${query}`);
+    },
+    summary: (companyId) => request(`/api/companies/${companyId}/orders/summary`),
+    setStatus: (companyId, orderId, status) =>
+      request(`/api/companies/${companyId}/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
       }),
   },
   documents: {

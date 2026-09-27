@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const config = require("../../config");
+const WebhookEvent = require("../../models/WebhookEvent");
 const { mapIncomingWebhook } = require("./whatsapp.mapper");
 const whatsappService = require("./whatsapp.service");
 
@@ -22,6 +24,21 @@ function verifyWebhook(req, res) {
 }
 
 async function receiveWebhook(req, res) {
+  if (!config.whatsappAppSecret) {
+    return res.status(503).json({ error: "WhatsApp webhook signature validation is not configured" });
+  }
+  const header = String(req.headers["x-hub-signature-256"] || "");
+  const provided = header.startsWith("sha256=") ? header.slice(7) : "";
+  const expected = crypto
+    .createHmac("sha256", config.whatsappAppSecret)
+    .update(req.rawBody || Buffer.from(""))
+    .digest("hex");
+  if (
+    provided.length !== expected.length
+    || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+  ) {
+    return res.status(403).json({ error: "Invalid WhatsApp signature" });
+  }
   const messages = mapIncomingWebhook(req.body);
 
   if (!messages.length) {
@@ -29,7 +46,7 @@ async function receiveWebhook(req, res) {
     return res.sendStatus(200);
   }
 
-  const results = [];
+  res.sendStatus(200);
 
   for (const message of messages) {
     console.log("WhatsApp message received", {
@@ -40,13 +57,15 @@ async function receiveWebhook(req, res) {
     });
 
     try {
-      const result = await whatsappService.replyToIncomingMessage(message);
-      results.push({
-        whatsappMessageId: message.whatsappMessageId,
-        status: "sent",
-        result,
-      });
+      if (message.whatsappMessageId) {
+        await WebhookEvent.create({
+          provider: "whatsapp",
+          eventId: message.whatsappMessageId,
+        });
+      }
+      await whatsappService.replyToIncomingMessage(message);
     } catch (err) {
+      if (err.code === 11000) continue;
       const metaError = err.response?.data?.error;
       const detail = metaError?.message || err.message;
 
@@ -62,29 +81,8 @@ async function receiveWebhook(req, res) {
         errorSubcode: metaError?.error_subcode,
         fbtraceId: metaError?.fbtrace_id,
       });
-
-      results.push({
-        whatsappMessageId: message.whatsappMessageId,
-        status: "failed",
-        error: {
-          message: detail,
-          companyId: err.whatsappContext?.companyId,
-          phoneNumberId: err.whatsappContext?.phoneNumberId,
-          accessTokenLast4: err.whatsappContext?.accessTokenLast4,
-          type: metaError?.type,
-          code: metaError?.code,
-          errorSubcode: metaError?.error_subcode,
-          fbtraceId: metaError?.fbtrace_id,
-        },
-      });
     }
   }
-
-  return res.status(200).json({
-    status: "received",
-    processed: results.length,
-    results,
-  });
 }
 
 async function sendTextMessage(req, res) {

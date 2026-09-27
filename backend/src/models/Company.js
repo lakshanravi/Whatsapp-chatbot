@@ -63,6 +63,15 @@ const companySchema = new mongoose.Schema(
         launcherIcon: "bot",
       }),
     },
+    commerceSettings: {
+      currency: { type: String, default: "LKR", uppercase: true, trim: true },
+      deliveryFee: { type: Number, default: 0, min: 0 },
+      paymentMethods: {
+        type: [String],
+        default: ["Cash on delivery", "Bank transfer"],
+      },
+      orderingEnabled: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );

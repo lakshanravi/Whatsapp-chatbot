@@ -954,6 +954,7 @@ class RAGEngine:
         preferred_document_ids: list[str] | None = None,
         preferred_product_names: list[str] | None = None,
         preferred_model_ids: list[str] | None = None,
+        response_language: str = "",
     ) -> QueryResponse:
         query_started = perf_counter()
         timings: dict[str, int] = {}
@@ -1542,6 +1543,12 @@ class RAGEngine:
                         f"Standalone search question: {standalone_question}\n\n"
                         f"Required answer modes: {', '.join(answer_modes)}. "
                         "Address every distinct sub-question in the user's message.\n\n"
+                        + (
+                            "Language requirement: write the complete customer-facing answer in "
+                            + {"en": "English", "si": "Sinhala", "ta": "Tamil"}.get(response_language, "the customer's language")
+                            + ". Keep product names, model identifiers, and cited source labels unchanged.\n\n"
+                            if response_language else ""
+                        )
                         + (
                             "Comparison requirement: compare the named products clearly in natural "
                             "prose or compact bullets. Do not use a table unless the user asked for "
