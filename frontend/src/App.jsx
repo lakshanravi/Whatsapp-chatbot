@@ -162,6 +162,7 @@ export default function App() {
   const [chatMessage, setChatMessage] = useState("");
   const [chatSessionId, setChatSessionId] = useState("");
   const [chatResult, setChatResult] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
   const [widgetKeyResult, setWidgetKeyResult] = useState(null);
   const [widgetApiKeyInput, setWidgetApiKeyInput] = useState("");
   const [widgetEmbedMode, setWidgetEmbedMode] = useState("all");
@@ -430,6 +431,7 @@ export default function App() {
       setSelectedConversation(null);
       setConversationSearch("");
       setChatResult(null);
+      setChatMessages([]);
       setWidgetKeyResult(null);
       setWidgetApiKeyInput("");
       setWidgetEmbedMode("all");
@@ -572,6 +574,7 @@ export default function App() {
     setConversations([]);
     setSelectedConversation(null);
     setChatResult(null);
+    setChatMessages([]);
     setWidgetKeyResult(null);
     setWidgetApiKeyInput("");
     setWidgetEmbedMode("all");
@@ -1204,13 +1207,24 @@ ${widgetScriptSrc()}`;
   async function handleChat(event) {
     event.preventDefault();
     if (!selectedCompany || !chatMessage.trim()) return;
-    const payload = { message: chatMessage.trim() };
+    const sentMessage = chatMessage.trim();
+    const payload = { message: sentMessage };
     if (chatSessionId.trim()) payload.sessionId = chatSessionId.trim();
     const result = await runTask("chat", () => api.chat.ask(selectedCompany._id, payload));
     if (result) {
       setChatResult(result);
       setChatSessionId(result.sessionId || "");
       setChatMessage("");
+      try {
+        const history = await api.chat.history(selectedCompany._id, result.sessionId);
+        setChatMessages(history.messages || []);
+      } catch {
+        setChatMessages((current) => [
+          ...current,
+          { role: "user", content: sentMessage },
+          { role: "assistant", content: result.answer, sources: result.sources || [], media: result.media || [] },
+        ]);
+      }
       await loadConversations();
     }
   }
@@ -1319,6 +1333,7 @@ ${widgetScriptSrc()}`;
   function handleNewChatSession() {
     setChatSessionId("");
     setChatResult(null);
+    setChatMessages([]);
     setChatMessage("");
   }
 
@@ -1382,7 +1397,7 @@ ${widgetScriptSrc()}`;
       try {
         fileHandle = await window.showSaveFilePicker({
           suggestedName,
-          types: [{ description: "Commerce Assistant backup", accept: { "application/zip": [".zip"] } }],
+          types: [{ description: "Pentarix AI Assistant backup", accept: { "application/zip": [".zip"] } }],
         });
       } catch (error) {
         setBackupProgress(null);
@@ -1595,6 +1610,13 @@ ${widgetScriptSrc()}`;
                       }
                     >
                       <FormattedAnswer text={message.content} />
+                      {message.media?.length > 0 && (
+                        <div className="mt-3 grid gap-2">
+                          {message.media.map((item) => (
+                            <img key={item.url} src={item.url} alt={item.altText || "Supporting document image"} className="max-h-52 w-full rounded-xl border border-slate-200 bg-white object-contain" loading="lazy" />
+                          ))}
+                        </div>
+                      )}
                       {message.sources?.length > 0 && (
                         <div className="pt-2 mt-2 text-xs border-t border-slate-200 text-slate-500">
                           Sources: {sourceSummary(message.sources)}
@@ -2998,25 +3020,45 @@ ${widgetScriptSrc()}`;
                       </SecondaryButton>
                     </div>
                   </form>
-                  {chatResult && (
-                    <div className="p-4 border-t border-slate-200">
-                      <div className="mb-2 text-xs font-semibold tracking-wide uppercase text-slate-500">
-                        Answer
+                  {chatMessages.length > 0 && (
+                    <div className="border-t border-slate-200 bg-slate-50/70 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversation</div>
+                        <div className="max-w-[70%] truncate text-xs text-slate-500">Session: {chatSessionId}</div>
                       </div>
-                      <div className="text-slate-800"><FormattedAnswer text={chatResult.answer} /></div>
-                      <div className="mt-4 text-xs text-slate-500">Session: {chatResult.sessionId}</div>
-                      <ChatDiagnostics diagnostics={chatResult.diagnostics} />
-                      <div className="mt-4 space-y-2">
-                        {(chatResult.sources || []).map((source, index) => (
-                          <div key={`${source.documentId}-${index}`} className="p-3 border rounded border-slate-200 bg-slate-50">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold truncate text-slate-700">{sourceLabel(source)}</span>
-                              <span className="text-xs text-slate-500">{source.score}</span>
-                            </div>
-                            <p className="mt-2 text-xs leading-5 line-clamp-3 text-slate-600">{source.content}</p>
+                      <div className="max-h-[560px] space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
+                        {chatMessages.map((message, messageIndex) => (
+                          <div
+                            key={`${message.role}-${messageIndex}`}
+                            className={classNames(
+                              "max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm",
+                              message.role === "user"
+                                ? "ml-auto rounded-br-md bg-emerald-700 text-white"
+                                : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
+                            )}
+                          >
+                            <FormattedAnswer text={message.content} />
+                            {message.media?.length > 0 && (
+                              <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                                {message.media.map((item) => (
+                                  <img key={item.url} src={item.url} alt={item.altText || "Supporting document image"} className="max-h-64 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" loading="lazy" />
+                                ))}
+                              </div>
+                            )}
+                            {message.sources?.length > 0 && (
+                              <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                                {message.sources.map((source, sourceIndex) => (
+                                  <div key={`${source.documentId}-${sourceIndex}`} className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600">
+                                    <div className="font-semibold text-slate-700">{sourceLabel(source)}</div>
+                                    <p className="mt-1 line-clamp-2 leading-5">{source.content}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
+                      {chatResult?.diagnostics && <ChatDiagnostics diagnostics={chatResult.diagnostics} />}
                     </div>
                   )}
                 </section>

@@ -23,6 +23,7 @@ const productsRouter = require("./routes/products");
 const ordersRouter = require("./routes/orders");
 const messengerIntegrationsRouter = require("./routes/messengerIntegrations");
 const messengerRoutes = require("./modules/messenger/messenger.routes");
+const mediaRouter = require("./routes/media");
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.get("/health", async (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/media", mediaRouter);
 app.use("/api/admin-users", requireAuth, adminUsersRouter);
 app.use("/api/backups", requireAuth, backupsRouter);
 app.use("/api/companies", requireAuth, companiesRouter);

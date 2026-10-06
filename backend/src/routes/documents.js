@@ -57,6 +57,23 @@ function removeUploadedFile(filePath) {
   if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
 }
 
+function mediaFromIngest(result) {
+  return (result.media || []).map((item) => ({
+    fileName: item.file_name,
+    pageNumber: item.page_number,
+    width: item.width || 0,
+    height: item.height || 0,
+    mimeType: item.mime_type || "image/png",
+    altText: item.alt_text || `Image from PDF page ${item.page_number}`,
+    contextText: item.context_text || "",
+  }));
+}
+
+function removeDocumentMedia(doc) {
+  const directory = path.join(path.dirname(doc.filePath), "media", doc._id.toString());
+  if (fs.existsSync(directory)) fs.rmSync(directory, { recursive: true, force: true });
+}
+
 async function ensureCompany(companyId) {
   return Company.findById(companyId);
 }
@@ -121,6 +138,7 @@ async function reindexStoredDocument(companyId, doc) {
 
     doc.status = "indexed";
     doc.chunksIndexed = result.chunks_indexed;
+    doc.media = mediaFromIngest(result);
     doc.indexError = null;
     await doc.save();
     return { ok: true, statusCode: 200, document: doc };
@@ -188,6 +206,7 @@ async function createAndIndexDocument(
 
     doc.status = "indexed";
     doc.chunksIndexed = result.chunks_indexed;
+    doc.media = mediaFromIngest(result);
     await doc.save();
 
     return { ok: true, document: doc };
@@ -335,6 +354,7 @@ router.delete("/all", async (req, res) => {
       if (fs.existsSync(doc.filePath)) {
         fs.unlinkSync(doc.filePath);
       }
+      removeDocumentMedia(doc);
     }
 
     await Document.deleteMany({ companyId: req.params.companyId });
@@ -374,6 +394,7 @@ router.delete("/bulk", async (req, res) => {
       if (fs.existsSync(doc.filePath)) {
         fs.unlinkSync(doc.filePath);
       }
+      removeDocumentMedia(doc);
     }
 
     await Document.deleteMany({
@@ -412,6 +433,7 @@ router.delete("/:documentId", async (req, res) => {
     if (fs.existsSync(doc.filePath)) {
       fs.unlinkSync(doc.filePath);
     }
+    removeDocumentMedia(doc);
 
     await doc.deleteOne();
     res.json({ message: "Document deleted", documentId: req.params.documentId });

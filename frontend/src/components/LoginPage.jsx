@@ -29,7 +29,7 @@ export function LoginPage({ loginForm, setLoginForm, loading, error, handleLogin
               <ShoppingBag size={22} strokeWidth={2.4} />
             </div>
             <div>
-              <div className="text-base font-bold tracking-tight">Commerce Assistant</div>
+              <div className="text-base font-bold tracking-tight">Pentarix AI Assistant</div>
               <div className="text-xs font-medium text-slate-400">Conversational selling workspace</div>
             </div>
           </div>

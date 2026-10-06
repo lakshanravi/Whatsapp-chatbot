@@ -1,7 +1,7 @@
 const DEFAULTS = {
   apiBaseUrl: "https://botbackend.pentarixlabs.com",
   companyId: "",
-  title: "Support Chat",
+  title: "Pentarix AI Assistant",
   subtitle: "Ask from our knowledge base",
   accentColor: "#111827",
   headerColor: "",
@@ -90,6 +90,7 @@ function createStyle(config) {
     .ragw-user{margin-left:auto;background:${sendButtonColor};color:#fff}
     .ragw-bot{background:#fff;border:1px solid #e1e7ef;color:#172033}
     .ragw-sources{margin-top:8px;border-top:1px solid #e6ebf2;padding-top:7px;font-size:11px;color:#64748b}
+    .ragw-media{display:grid;gap:8px;margin:0 0 10px}.ragw-media img{display:block;width:100%;max-height:240px;object-fit:contain;border:1px solid #e1e7ef;border-radius:9px;background:#f8fafc}
     .ragw-suggestions{display:grid;gap:6px;margin-top:10px}.ragw-suggestion{width:100%;border:1px solid #cbd5e1;border-radius:7px;background:#f8fafc;color:#1e293b;padding:8px 9px;text-align:left;font:inherit;font-size:12px;line-height:1.35;cursor:pointer}.ragw-suggestion:hover{border-color:${sendButtonColor};background:#f1f5f9}.ragw-suggestion:disabled{opacity:.55;cursor:not-allowed}
     .ragw-line{min-height:1em;margin:0 0 5px}.ragw-line:last-child{margin-bottom:0}
     .ragw-list{padding-left:18px;margin:6px 0}.ragw-list li{margin:3px 0}
@@ -145,9 +146,21 @@ function appendFormattedAnswer(node, text) {
   }
 }
 
-function messageNode(role, text, sources = [], feedbackOptions = null, suggestions = []) {
+function messageNode(role, text, sources = [], feedbackOptions = null, suggestions = [], media = []) {
   const node = document.createElement("div");
   node.className = `ragw-msg ${role === "user" ? "ragw-user" : "ragw-bot"}`;
+  if (role !== "user" && media.length) {
+    const gallery = document.createElement("div");
+    gallery.className = "ragw-media";
+    for (const item of media) {
+      const image = document.createElement("img");
+      image.src = item.url;
+      image.alt = item.altText || "Supporting document image";
+      image.loading = "lazy";
+      gallery.appendChild(image);
+    }
+    node.appendChild(gallery);
+  }
   appendFormattedAnswer(node, text);
   if (sources.length) {
     const sourceBox = document.createElement("div");
@@ -293,7 +306,8 @@ function initWidget(options = {}) {
             { isSuggestion: true }
           ),
         },
-        result.suggestions || []
+        result.suggestions || [],
+        result.media || []
       ));
     } catch (error) {
       if (sessionId !== requestSessionId) return;
@@ -336,7 +350,10 @@ function initWidget(options = {}) {
         messages.appendChild(messageNode(
           savedMessage.role,
           savedMessage.content,
-          savedMessage.sources || []
+          savedMessage.sources || [],
+          null,
+          [],
+          savedMessage.media || []
         ));
       }
     } catch (error) {

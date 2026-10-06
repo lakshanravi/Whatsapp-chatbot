@@ -27,6 +27,7 @@ from app.models.schemas import (
     UpdateDocumentActiveRequest,
 )
 from app.services.rag_engine import RAGEngine
+from app.services.pdf_processor import extract_embedded_images
 
 app = FastAPI(
     title="RAG Service",
@@ -224,10 +225,13 @@ def ingest_document(request: IngestRequest):
             effective_date=request.effective_date,
             is_active=request.is_active,
         )
+        media_dir = str(Path(request.file_path).parent / "media" / request.document_id)
+        media = extract_embedded_images(request.file_path, media_dir)
         return IngestResponse(
             success=True,
             chunks_indexed=chunks,
             message=f"Indexed {chunks} chunks for document {request.document_id}",
+            media=media,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

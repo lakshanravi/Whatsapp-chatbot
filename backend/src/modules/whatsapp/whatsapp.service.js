@@ -126,6 +126,7 @@ async function createRagReply(incomingMessage) {
   return {
     answer: result.answer,
     sources: result.sources || [],
+    media: result.media || [],
     conversationId: result.conversation?._id,
     orderId: result.order?._id,
     sessionId,
@@ -177,6 +178,22 @@ async function sendTextMessage({ to, text, companyId, integration }) {
   }
 }
 
+async function sendImageMessage({ to, imageUrl, caption = "", integration }) {
+  const accessToken = integration.getAccessToken();
+  const response = await axios.post(
+    buildMessagesUrl(integration.phoneNumberId),
+    {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: String(to).trim(),
+      type: "image",
+      image: { link: imageUrl, caption: String(caption || "").slice(0, 1024) },
+    },
+    { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+  );
+  return response.data;
+}
+
 async function validateIntegration({ companyId }) {
   const integration = await getIntegrationByCompanyId(companyId);
   const accessToken = integration.getAccessToken();
@@ -219,13 +236,24 @@ async function replyToIncomingMessage(incomingMessage) {
     text: reply.answer,
     integration,
   });
+  const mediaResults = [];
+  for (const media of (reply.media || []).slice(0, 3)) {
+    mediaResults.push(await sendImageMessage({
+      to: incomingMessage.senderPhoneNumber,
+      imageUrl: media.url,
+      caption: media.altText,
+      integration,
+    }));
+  }
 
   return {
     answer: reply.answer,
     sources: reply.sources,
+    media: reply.media || [],
     conversationId: reply.conversationId,
     sessionId: reply.sessionId,
     metaResult,
+    mediaResults,
   };
 }
 
@@ -234,5 +262,6 @@ module.exports = {
   createRagReply,
   replyToIncomingMessage,
   sendTextMessage,
+  sendImageMessage,
   validateIntegration,
 };

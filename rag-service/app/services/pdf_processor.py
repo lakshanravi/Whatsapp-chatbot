@@ -1,6 +1,8 @@
 import base64
+import hashlib
 from io import BytesIO
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +36,74 @@ class PdfChunk:
     section_heading: str = ""
     evidence_type: str = "text"
     evidence_confidence: float = 1.0
+
+
+def extract_embedded_images(file_path: str, output_dir: str) -> list[dict]:
+    """Extract useful raster images and retain their PDF page relationship."""
+    destination = Path(output_dir)
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    extracted: list[dict] = []
+    seen_hashes: set[str] = set()
+    document = fitz.open(file_path)
+    try:
+        for page_index, page in enumerate(document):
+            page_count = 0
+            for image_info in page.get_images(full=True):
+                if page_count >= settings.max_described_images_per_page:
+                    break
+                try:
+                    payload = document.extract_image(image_info[0])
+                    data = payload.get("image", b"")
+                    width = int(payload.get("width") or 0)
+                    height = int(payload.get("height") or 0)
+                    if not data or width < settings.min_image_size or height < settings.min_image_size:
+                        continue
+                    digest = hashlib.sha256(data).hexdigest()
+                    if digest in seen_hashes:
+                        continue
+                    seen_hashes.add(digest)
+                    extension = re.sub(r"[^a-z0-9]", "", str(payload.get("ext") or "png").lower()) or "png"
+                    filename = f"page-{page_index + 1}-image-{page_count + 1}-{digest[:10]}.{extension}"
+                    (destination / filename).write_bytes(data)
+                    extracted.append({
+                        "file_name": filename,
+                        "page_number": page_index + 1,
+                        "width": width,
+                        "height": height,
+                        "mime_type": f"image/{'jpeg' if extension in ('jpg', 'jpeg') else extension}",
+                        "alt_text": f"Image from PDF page {page_index + 1}",
+                        "context_text": page.get_text("text")[:2000],
+                    })
+                    page_count += 1
+                except Exception:
+                    continue
+            # Some manuals contain vector diagrams rather than embedded raster
+            # images. Preserve a readable page rendering for those diagrams.
+            if page_count == 0 and len(page.get_drawings()) >= settings.min_vector_drawings_for_visual_page:
+                try:
+                    pixmap = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+                    data = pixmap.tobytes("png")
+                    digest = hashlib.sha256(data).hexdigest()
+                    if digest not in seen_hashes:
+                        seen_hashes.add(digest)
+                        filename = f"page-{page_index + 1}-visual-{digest[:10]}.png"
+                        (destination / filename).write_bytes(data)
+                        extracted.append({
+                            "file_name": filename,
+                            "page_number": page_index + 1,
+                            "width": pixmap.width,
+                            "height": pixmap.height,
+                            "mime_type": "image/png",
+                            "alt_text": f"Visual PDF page {page_index + 1}",
+                            "context_text": page.get_text("text")[:2000],
+                        })
+                except Exception:
+                    pass
+    finally:
+        document.close()
+    return extracted
 
 
 def _table_to_markdown(table: list[list[str | None]]) -> str:

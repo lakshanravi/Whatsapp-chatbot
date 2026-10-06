@@ -98,7 +98,7 @@ export function AdminShell({
   return (
     <div className="min-h-screen bg-[#f4f7f6] text-slate-950">
       <div className="min-h-screen lg:grid lg:grid-cols-[278px_minmax(0,1fr)]">
-        <aside className="border-b border-white/10 bg-[#07111f] text-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0">
+        <aside className="min-h-screen border-b border-white/10 bg-[#07111f] text-white lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden lg:border-b-0">
           <div className="flex h-full flex-col lg:px-4 lg:py-5">
             <div className="flex items-center justify-between px-4 py-4 lg:px-2 lg:py-0">
               <div className="flex items-center gap-3">
@@ -106,7 +106,7 @@ export function AdminShell({
                   <ShoppingBag size={20} strokeWidth={2.5} />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-bold tracking-tight">Commerce Assistant</div>
+                  <div className="text-sm font-bold tracking-tight">Pentarix AI Assistant</div>
                   <div className="truncate text-[11px] font-medium text-slate-500">Seller operations</div>
                 </div>
               </div>
@@ -115,7 +115,7 @@ export function AdminShell({
               </button>
             </div>
 
-            <div className="border-t border-white/[0.06] px-3 py-3 lg:mt-6 lg:border-0 lg:px-0 lg:py-0">
+            <div className="border-t border-white/[0.06] px-3 py-3 lg:mt-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:border-0 lg:px-0 lg:py-0 lg:pr-1 sidebar-scroll">
               <nav className="flex gap-1 overflow-x-auto pb-1 lg:hidden">
                 {activeNavItems.map((item) => (
                   <NavButton key={item.id} item={item} compact active={activeSection === item.id} onClick={() => setActiveSection(item.id)} />
@@ -180,7 +180,7 @@ export function AdminShell({
                   <span className="truncate">{selectedCompany ? selectedCompany.name : "Platform administration"}</span>
                 </div>
                 <h1 className="mt-1 truncate text-2xl font-bold tracking-tight text-slate-950">{pageTitle}</h1>
-                <p className="mt-0.5 hidden truncate text-sm text-slate-500 sm:block">{sectionDescriptions[activeSection] || "Manage your commerce assistant workspace."}</p>
+                <p className="mt-0.5 hidden truncate text-sm text-slate-500 sm:block">{sectionDescriptions[activeSection] || "Manage your Pentarix AI workspace."}</p>
               </div>
               <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm sm:flex">
                 <span className={classNames("h-2 w-2 rounded-full", systemsHealthy ? "bg-emerald-500" : "bg-amber-500")} />

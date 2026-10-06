@@ -69,6 +69,17 @@ const conversationSchema = new mongoose.Schema(
       modelIds: { type: [String], default: [] },
       documentIds: { type: [String], default: [] },
     },
+    media: {
+      type: [{
+        url: String,
+        altText: String,
+        documentId: String,
+        documentName: String,
+        pageNumber: Number,
+        mimeType: String,
+      }],
+      default: [],
+    },
     preferredLanguage: {
       type: String,
       enum: ["", "en", "si", "ta"],

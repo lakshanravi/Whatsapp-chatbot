@@ -63,6 +63,7 @@ class IngestResponse(BaseModel):
     success: bool
     chunks_indexed: int
     message: str
+    media: list[dict] = Field(default_factory=list)
 
 
 class DeleteResponse(BaseModel):

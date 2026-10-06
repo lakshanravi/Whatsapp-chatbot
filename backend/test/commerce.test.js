@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { detectLanguage, localizedText } = require("../src/services/commerce");
+const { detectExplicitLanguage, detectLanguage, localizedText } = require("../src/services/commerce");
 const { mapIncomingWebhook } = require("../src/modules/messenger/messenger.mapper");
 const Conversation = require("../src/models/Conversation");
 const Product = require("../src/models/Product");
@@ -11,6 +11,11 @@ test("detects all supported language selections", () => {
   assert.equal(detectLanguage("English"), "en");
   assert.equal(detectLanguage("தமிழ்"), "ta");
   assert.equal(detectLanguage("hello"), "");
+});
+
+test("does not interpret order quantities as language changes", () => {
+  assert.equal(detectExplicitLanguage("3"), "");
+  assert.equal(detectExplicitLanguage("Tamil"), "ta");
 });
 
 test("localized product names fall back to an available translation", () => {

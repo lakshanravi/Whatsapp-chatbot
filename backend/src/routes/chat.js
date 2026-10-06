@@ -7,6 +7,8 @@ const Company = require("../models/Company");
 const Conversation = require("../models/Conversation");
 const ragClient = require("../services/ragClient");
 const { preprocessUserMessage } = require("../services/messagePreprocessor");
+const { processCommerceMessage } = require("../services/commerce");
+const { findQuestionMedia, mapSourcesWithMedia } = require("../services/sourceMedia");
 const { verifyGoogleIdToken } = require("../services/googleAuth");
 const { verifyExternalUserToken } = require("../services/externalUserAuth");
 const { canAccessCompany } = require("../middleware/auth");
@@ -135,17 +137,6 @@ function isValidGuestSessionId(sessionId) {
   if (!sessionId || typeof sessionId !== "string") return false;
 
   return sessionId.startsWith("web_guest_") || sessionId.startsWith("web_");
-}
-
-function mapSources(ragSources = []) {
-  return ragSources.map((source) => ({
-    documentId: source.document_id,
-    documentName: source.document_name,
-    content: source.content,
-    score: source.score,
-    pageNumber: source.page_number,
-    sectionHeading: source.section_heading || "",
-  }));
 }
 
 function nowMs() {
@@ -332,33 +323,44 @@ router.post("/", async (req, res) => {
 
     const sid = sessionId || createGuestSessionId();
 
-    let conversation = await Conversation.findOne({
+    const originalMessage = message.trim();
+    const commerce = await processCommerceMessage({
       companyId: company._id,
       sessionId: sid,
+      channel: "web",
+      text: originalMessage,
+      customer: {
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+        externalId: customerExternalId,
+        authProvider: customerAuthProvider || (sid.startsWith("web_guest_") ? "guest" : "web"),
+      },
     });
+    const conversation = commerce.conversation;
 
-    if (!conversation) {
-      conversation = new Conversation({
-        companyId: company._id,
+    if (commerce.handled) {
+      const commerceMedia = await findQuestionMedia(company._id, originalMessage);
+      if (commerceMedia.length) {
+        conversation.messages[conversation.messages.length - 1].media = commerceMedia;
+        await conversation.save();
+      }
+      timingsMs.total = nowMs() - requestStarted;
+      return res.json({
         sessionId: sid,
-        customerName: customerName || "",
-        customerEmail: customerEmail || "",
-        customerPhone: customerPhone || "",
-        customerExternalId: customerExternalId || "",
-        customerAuthProvider: customerAuthProvider || (sid.startsWith("web_guest_") ? "guest" : ""),
-        channel: "web",
-        messages: [],
+        answer: commerce.answer,
+        sources: commerce.sources || [],
+        media: commerceMedia,
+        suggestions: [],
+        conversationId: conversation._id,
+        language: commerce.language || conversation.preferredLanguage || "",
+        order: commerce.order || null,
+        diagnostics: {
+          timingsMs,
+          cache: { hit: false },
+        },
       });
-    } else {
-      if (customerName) conversation.customerName = customerName;
-      if (customerEmail) conversation.customerEmail = customerEmail;
-      if (customerPhone) conversation.customerPhone = customerPhone;
-      if (customerExternalId) conversation.customerExternalId = customerExternalId;
-      if (customerAuthProvider) conversation.customerAuthProvider = customerAuthProvider;
     }
-
-    const originalMessage = message.trim();
-    conversation.messages.push({ role: "user", content: originalMessage });
 
     const preprocessStarted = nowMs();
     const preprocessed = await preprocessUserMessage(originalMessage, {
@@ -378,6 +380,7 @@ router.post("/", async (req, res) => {
         sessionId: sid,
         answer: preprocessed.reply,
         sources: [],
+        media: [],
         suggestions: [],
         conversationId: conversation._id,
         diagnostics: {
@@ -395,11 +398,15 @@ router.post("/", async (req, res) => {
     const ragResult = await ragClient.queryKnowledge({
       companyId: company._id.toString(),
       question: preprocessed.question,
+      responseLanguage: commerce.language,
       ...ragContext,
     });
     timingsMs.ragService = nowMs() - ragStarted;
 
-    const sources = mapSources(ragResult.sources || []);
+    const mapped = await mapSourcesWithMedia(company._id, ragResult.sources || []);
+    const fallbackMedia = await findQuestionMedia(company._id, originalMessage);
+    const { sources } = mapped;
+    const media = mapped.media.length ? mapped.media : fallbackMedia;
     const diagnostics = {
       ...(ragResult.diagnostics || {}),
       timingsMs: {
@@ -418,6 +425,7 @@ router.post("/", async (req, res) => {
       role: "assistant",
       content: ragResult.answer,
       sources,
+      media,
       diagnostics,
     });
 
@@ -427,8 +435,10 @@ router.post("/", async (req, res) => {
       sessionId: sid,
       answer: ragResult.answer,
       sources,
+      media,
       suggestions: ragResult.suggestions || [],
       conversationId: conversation._id,
+      language: commerce.language,
       diagnostics,
     });
   } catch (err) {

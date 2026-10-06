@@ -1,5 +1,18 @@
 const mongoose = require("mongoose");
 
+const documentMediaSchema = new mongoose.Schema(
+  {
+    fileName: { type: String, required: true },
+    pageNumber: { type: Number, required: true },
+    width: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
+    mimeType: { type: String, default: "image/png" },
+    altText: { type: String, default: "PDF image" },
+    contextText: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const documentSchema = new mongoose.Schema(
   {
     companyId: {
@@ -51,6 +64,7 @@ const documentSchema = new mongoose.Schema(
     documentVersion: { type: String, default: "1" },
     effectiveDate: { type: Date, default: null },
     isActive: { type: Boolean, default: true, index: true },
+    media: { type: [documentMediaSchema], default: [] },
   },
   { timestamps: true }
 );

@@ -1,4 +1,4 @@
-# Multi-Tenant RAG Chatbot
+# Pentarix AI Assistant
 
 A multi-company RAG (Retrieval-Augmented Generation) customer support system. Each company uploads PDF knowledge-base documents, and customers can ask questions through web chat, WhatsApp, or SMS. Answers are grounded only in the selected company's documents.
 
@@ -7,7 +7,7 @@ A multi-company RAG (Retrieval-Augmented Generation) customer support system. Ea
 - Multi-company admin dashboard
 - Company admin and superadmin access
 - PDF upload and per-company vector indexing
-- Web chat widget with guest mode, Google login, and website-account login
+- Web chat widget with guest mode, Google login, website-account login, and conversational ordering
 - Persistent chat history for web, WhatsApp, and SMS users
 - WhatsApp Cloud API integration per company
 - Facebook Messenger Page integration per company
@@ -438,7 +438,7 @@ Each seller can connect one Facebook Page from the **Messenger Integration** scr
 GET/POST https://your-backend-domain.com/api/messenger/webhook
 ```
 
-Subscribe the Page to `messages` and `messaging_postbacks`. Incoming WhatsApp and Messenger customers are first asked to choose Sinhala, English, or Tamil. Their preference is stored with the conversation and is passed to the RAG answer service.
+Subscribe the Page to `messages` and `messaging_postbacks`. Incoming web, WhatsApp, and Messenger customers are first asked to choose Sinhala, English, or Tamil. Their preference is stored with the conversation and is passed to the RAG answer service.
 
 Sellers manage structured, orderable products from the **Products** screen. When a customer asks to order, the bot collects the product, variant, quantity, customer details, delivery address, payment method, and confirmation. Confirmed orders appear in the **Orders** screen with this workflow:
 

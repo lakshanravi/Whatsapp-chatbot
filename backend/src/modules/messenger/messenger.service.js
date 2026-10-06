@@ -24,6 +24,20 @@ async function sendText({ recipientId, text, integration }) {
   return response.data;
 }
 
+async function sendImage({ recipientId, imageUrl, integration }) {
+  const version = String(config.graphApiVersion || "v20.0").replace(/^v?/, "v");
+  const response = await axios.post(
+    `https://graph.facebook.com/${version}/me/messages`,
+    {
+      recipient: { id: recipientId },
+      messaging_type: "RESPONSE",
+      message: { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } },
+    },
+    { params: { access_token: integration.getPageAccessToken() } }
+  );
+  return response.data;
+}
+
 async function replyToMessage(message) {
   const integration = await integrationForPage(message.pageId);
   const result = await processCustomerMessage({
@@ -38,11 +52,17 @@ async function replyToMessage(message) {
     text: result.answer,
     integration,
   });
+  const mediaResults = [];
+  for (const media of (result.media || []).slice(0, 3)) {
+    mediaResults.push(await sendImage({ recipientId: message.senderId, imageUrl: media.url, integration }));
+  }
   return {
     answer: result.answer,
     conversationId: result.conversation?._id,
     orderId: result.order?._id,
     providerResult,
+    media: result.media || [],
+    mediaResults,
   };
 }
 
@@ -59,4 +79,4 @@ async function validateIntegration(companyId) {
   return { status: "valid", page: response.data };
 }
 
-module.exports = { replyToMessage, sendText, validateIntegration };
+module.exports = { replyToMessage, sendImage, sendText, validateIntegration };

@@ -1,17 +1,7 @@
 const { processCommerceMessage } = require("./commerce");
 const { preprocessUserMessage } = require("./messagePreprocessor");
 const ragClient = require("./ragClient");
-
-function mapSources(sources) {
-  return (sources || []).map((source) => ({
-    documentId: source.document_id,
-    documentName: source.document_name,
-    content: source.content,
-    score: source.score,
-    pageNumber: source.page_number,
-    sectionHeading: source.section_heading || "",
-  }));
-}
+const { findQuestionMedia, mapSourcesWithMedia } = require("./sourceMedia");
 
 async function processCustomerMessage({ companyId, sessionId, channel, text, customer }) {
   const commerce = await processCommerceMessage({
@@ -21,7 +11,14 @@ async function processCustomerMessage({ companyId, sessionId, channel, text, cus
     text,
     customer,
   });
-  if (commerce.handled) return commerce;
+  if (commerce.handled) {
+    const media = await findQuestionMedia(companyId, text);
+    if (media.length && commerce.conversation?.messages?.length) {
+      commerce.conversation.messages[commerce.conversation.messages.length - 1].media = media;
+      await commerce.conversation.save();
+    }
+    return { ...commerce, media };
+  }
 
   const { conversation, language } = commerce;
   const preprocessed = await preprocessUserMessage(text);
@@ -46,12 +43,15 @@ async function processCustomerMessage({ companyId, sessionId, channel, text, cus
     responseLanguage: language,
     ...ragContext,
   });
-  const sources = mapSources(ragResult.sources);
+  const mapped = await mapSourcesWithMedia(companyId, ragResult.sources || []);
+  const fallbackMedia = await findQuestionMedia(companyId, text);
+  const { sources } = mapped;
+  const media = mapped.media.length ? mapped.media : fallbackMedia;
   const answer = ragResult.answer || "I could not find an answer for that yet.";
   ragClient.updateConversationRagContext(conversation, ragResult);
-  conversation.messages.push({ role: "assistant", content: answer, sources });
+  conversation.messages.push({ role: "assistant", content: answer, sources, media });
   await conversation.save();
-  return { answer, sources, conversation, language, suggestions: ragResult.suggestions || [] };
+  return { answer, sources, media, conversation, language, suggestions: ragResult.suggestions || [] };
 }
 
 module.exports = { processCustomerMessage };

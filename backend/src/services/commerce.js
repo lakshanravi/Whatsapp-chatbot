@@ -79,6 +79,14 @@ function detectLanguage(value) {
   return "";
 }
 
+function detectExplicitLanguage(value) {
+  const text = normalize(value);
+  if (/^(si|sin|sinhala|සිංහල)$/.test(text)) return "si";
+  if (/^(en|eng|english)$/.test(text)) return "en";
+  if (/^(ta|tam|tamil|தமிழ்)$/.test(text)) return "ta";
+  return "";
+}
+
 function localizedText(value, language = "en") {
   if (!value) return "";
   return value[language] || value.en || value.si || value.ta || "";
@@ -102,6 +110,10 @@ function isCatalogIntent(text) {
   return /\b(products?|catalog|menu|items?)\b/i.test(text)
     || /(භාණ්ඩ|නිෂ්පාදන|ලැයිස්තුව)/u.test(text)
     || /(தயாரிப்பு|பொருட்கள்|பட்டியல்)/u.test(text);
+}
+
+function isProductInfoIntent(text) {
+  return /\b(image|images|photo|photos|picture|pictures|variant|variants|variation|variations|colou?r|colou?rs|price|stock|available)\b/i.test(text);
 }
 
 function isCancel(text) {
@@ -128,6 +140,9 @@ function resetDraft(conversation, stage = "browsing") {
 async function addReply(conversation, answer, extra = {}) {
   conversation.messages.push({ role: "assistant", content: answer });
   conversation.commerceState.updatedAt = new Date();
+  // `draft` is a Mixed field, so Mongoose cannot detect mutations to its
+  // nested properties unless the parent commerce state is marked dirty.
+  conversation.markModified("commerceState");
   await conversation.save();
   return { handled: true, answer, sources: [], conversation, ...extra };
 }
@@ -181,6 +196,17 @@ function orderSummary(draft, language, settings) {
   ].join("\n");
 }
 
+function hasCompleteDraft(draft) {
+  return Boolean(
+    draft.productId
+    && Number.isInteger(Number(draft.quantity))
+    && Number(draft.quantity) > 0
+    && draft.customerName
+    && draft.deliveryAddress
+    && draft.paymentMethod
+  );
+}
+
 async function createOrderNumber() {
   return `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 }
@@ -193,15 +219,18 @@ async function getConversation({ companyId, sessionId, channel, customer = {} })
       sessionId,
       channel,
       customerName: customer.name || "",
+      customerEmail: customer.email || "",
       customerPhone: customer.phone || "",
       customerExternalId: customer.externalId || "",
-      customerAuthProvider: channel,
+      customerAuthProvider: customer.authProvider || channel,
       messages: [],
     });
   } else {
     if (customer.name) conversation.customerName = customer.name;
+    if (customer.email) conversation.customerEmail = customer.email;
     if (customer.phone) conversation.customerPhone = customer.phone;
     if (customer.externalId) conversation.customerExternalId = customer.externalId;
+    if (customer.authProvider) conversation.customerAuthProvider = customer.authProvider;
   }
   return conversation;
 }
@@ -213,8 +242,8 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
   const message = String(text || "").trim();
   conversation.messages.push({ role: "user", content: message });
 
-  const requestedLanguage = detectLanguage(message);
   if (!conversation.preferredLanguage) {
+    const requestedLanguage = detectLanguage(message);
     if (!requestedLanguage) return addReply(conversation, COPY.en.chooseLanguage);
     conversation.preferredLanguage = requestedLanguage;
     resetDraft(conversation);
@@ -223,12 +252,13 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
 
   const language = conversation.preferredLanguage;
   const copy = COPY[language] || COPY.en;
+  const state = conversation.commerceState || { stage: "browsing", draft: {} };
+  const requestedLanguage = state.stage === "browsing" ? detectExplicitLanguage(message) : "";
   if (requestedLanguage && requestedLanguage !== language) {
     conversation.preferredLanguage = requestedLanguage;
     return addReply(conversation, COPY[requestedLanguage].welcome, { language: requestedLanguage });
   }
 
-  const state = conversation.commerceState || { stage: "browsing", draft: {} };
   const draft = state.draft || {};
   const settings = company.commerceSettings || {};
 
@@ -241,6 +271,26 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     if (isCatalogIntent(message)) {
       const catalog = await listProducts(companyId, language);
       return addReply(conversation, catalog.products.length ? catalog.text : copy.noProducts);
+    }
+    if (isProductInfoIntent(message)) {
+      const catalog = await listProducts(companyId, language);
+      const product = findProduct(catalog.products, message, language);
+      if (product) {
+        const name = localizedText(product.name, language);
+        const variants = product.variants.filter((item) => item.isActive && item.stock !== 0).map((item) => item.name);
+        const stock = product.stock === null || product.stock === undefined ? "Unlimited" : String(product.stock);
+        const labels = language === "si"
+          ? { price: "මිල", stock: "තොගය", variants: "විකල්ප" }
+          : language === "ta"
+            ? { price: "விலை", stock: "கையிருப்பு", variants: "வகைகள்" }
+            : { price: "Price", stock: "Stock", variants: "Variants" };
+        return addReply(conversation, [
+          name,
+          `${labels.price}: ${formatMoney(product.price, product.currency)}`,
+          `${labels.stock}: ${stock}`,
+          `${labels.variants}: ${variants.length ? variants.join(", ") : "-"}`,
+        ].join("\n"));
+      }
     }
     if (!settings.orderingEnabled || !isOrderIntent(message)) {
       await conversation.save();
@@ -364,6 +414,10 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     if (!method) return addReply(conversation, `${copy.askPayment}\n${numbered(methods)}`);
     draft.paymentMethod = method;
     delete draft.paymentMethods;
+    if (!hasCompleteDraft(draft)) {
+      resetDraft(conversation, "awaiting_product");
+      return addReply(conversation, copy.restarted);
+    }
     state.stage = "awaiting_confirmation";
     state.draft = draft;
     const summary = orderSummary(draft, language, settings);
@@ -378,6 +432,10 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     if (!isConfirm(message)) {
       const summary = orderSummary(draft, language, settings);
       return addReply(conversation, copy.confirm.replace("{summary}", summary));
+    }
+    if (!hasCompleteDraft(draft)) {
+      resetDraft(conversation, "awaiting_product");
+      return addReply(conversation, copy.restarted);
     }
     const subtotal = Number(draft.unitPrice) * Number(draft.quantity);
     const deliveryFee = Number(settings.deliveryFee || 0);
@@ -425,6 +483,7 @@ module.exports = {
   COPY,
   LANGUAGE_NAMES,
   detectLanguage,
+  detectExplicitLanguage,
   localizedText,
   processCommerceMessage,
 };

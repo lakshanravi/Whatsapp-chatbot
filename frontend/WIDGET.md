@@ -49,7 +49,7 @@ Host `rag-chat-widget.iife.js` somewhere public, then paste the embed code into 
     companyId: "PASTE_COMPANY_ID",
     apiKey: "PASTE_WIDGET_API_KEY",
 
-    title: "Support Chat",
+    title: "Pentarix AI Assistant",
     subtitle: "Ask us anything",
     accentColor: "#111827",
     position: "right",
@@ -65,7 +65,7 @@ Host `rag-chat-widget.iife.js` somewhere public, then paste the embed code into 
     allowGuest: true,
     guestText: "Continue without Login",
 
-    welcomeText: "Welcome to Support Chat",
+    welcomeText: "Welcome to Pentarix AI Assistant",
     loginText: "Login to load your saved chat history, or continue without login.",
     greeting: "Hi, how can I help?"
   };
