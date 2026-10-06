@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const { detectExplicitLanguage, detectLanguage, localizedText } = require("../src/services/commerce");
 const { mapIncomingWebhook } = require("../src/modules/messenger/messenger.mapper");
 const Conversation = require("../src/models/Conversation");
-const Product = require("../src/models/Product");
+const Order = require("../src/models/Order");
 
 test("detects all supported language selections", () => {
   assert.equal(detectLanguage("1"), "si");
@@ -53,12 +53,19 @@ test("conversation schema supports Messenger language and order state", async ()
   assert.equal(conversation.preferredLanguage, "ta");
 });
 
-test("product schema rejects negative prices", async () => {
-  const product = new Product({
+test("PDF-only orders do not require a catalogue product or known price", async () => {
+  const order = new Order({
     companyId: "507f1f77bcf86cd799439011",
-    sku: "SKU-1",
-    name: { en: "Tea" },
-    price: -1,
+    orderNumber: "ORD-TEST-1",
+    sessionId: "web-test",
+    channel: "web",
+    customer: { name: "Test User", deliveryAddress: "Colombo" },
+    items: [{ name: "Product described in a PDF", quantity: 2 }],
+    subtotal: 0,
+    total: 0,
+    paymentMethod: "Cash on delivery",
   });
-  await assert.rejects(product.validate(), /less than minimum allowed value/);
+  await order.validate();
+  assert.equal(order.items[0].productId, null);
+  assert.equal(order.priceStatus, "pending");
 });

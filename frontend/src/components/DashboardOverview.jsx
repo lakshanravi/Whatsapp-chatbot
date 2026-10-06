@@ -4,7 +4,6 @@ import {
   BookOpenText,
   CheckCircle2,
   MessageCircleMore,
-  Package,
   ShoppingCart,
   Sparkles,
 } from "lucide-react";
@@ -41,7 +40,6 @@ function ChannelRow({ name, detail, connected, onClick }) {
 
 export function DashboardOverview({ company, documents, conversations, setActiveSection }) {
   const [summary, setSummary] = useState(null);
-  const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [channels, setChannels] = useState({ whatsapp: false, messenger: false });
   const [loading, setLoading] = useState(true);
@@ -51,16 +49,14 @@ export function DashboardOverview({ company, documents, conversations, setActive
     async function load() {
       setLoading(true);
       const safe = (promise) => promise.catch(() => null);
-      const [orderSummary, productList, orderList, whatsapp, messenger] = await Promise.all([
+      const [orderSummary, orderList, whatsapp, messenger] = await Promise.all([
         safe(api.orders.summary(company._id)),
-        safe(api.products.list(company._id)),
         safe(api.orders.list(company._id, { limit: 5 })),
         safe(api.whatsappIntegration.get(company._id)),
         safe(api.messengerIntegration.get(company._id)),
       ]);
       if (!cancelled) {
         setSummary(orderSummary);
-        setProducts(productList || []);
         setOrders(orderList?.orders || []);
         setChannels({ whatsapp: Boolean(whatsapp?.isActive), messenger: Boolean(messenger?.isActive) });
         setLoading(false);
@@ -89,7 +85,7 @@ export function DashboardOverview({ company, documents, conversations, setActive
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={ShoppingCart} label="New orders" value={loading ? "—" : summary?.counts?.new || 0} detail="Waiting for your team to review" accent="emerald" />
-        <MetricCard icon={Package} label="Active products" value={loading ? "—" : products.filter((item) => item.isActive).length} detail={`${products.length} products in your catalogue`} accent="cyan" />
+        <MetricCard icon={ShoppingCart} label="Total orders" value={loading ? "—" : summary?.total || 0} detail="Orders captured from every connected channel" accent="cyan" />
         <MetricCard icon={MessageCircleMore} label="Conversations" value={conversations.length} detail="Customer conversations across channels" accent="violet" />
         <MetricCard icon={BookOpenText} label="Knowledge files" value={documents.length} detail={`${documents.filter((item) => item.status === "indexed").length} ready for customer answers`} accent="amber" />
       </section>
@@ -105,10 +101,10 @@ export function DashboardOverview({ company, documents, conversations, setActive
               <button key={order._id} type="button" onClick={() => setActiveSection("orders")} className="grid w-full gap-2 px-5 py-4 text-left transition hover:bg-slate-50 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
                 <div><div className="text-sm font-semibold text-slate-900">{order.orderNumber}</div><div className="mt-1 text-xs text-slate-500">{order.customer?.name} · {formatDate(order.createdAt)}</div></div>
                 <div className="text-sm text-slate-600">{order.items?.[0]?.quantity} × {order.items?.[0]?.name}</div>
-                <div className="flex items-center gap-3"><span className="text-sm font-semibold text-slate-900">{order.currency} {Number(order.total).toFixed(2)}</span><span className={classNames("rounded-full px-2 py-1 text-[10px] font-bold uppercase", order.status === "new" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600")}>{order.status}</span></div>
+                <div className="flex items-center gap-3"><span className="text-sm font-semibold text-slate-900">{order.priceStatus === "pending" ? "Price pending" : `${order.currency} ${Number(order.total).toFixed(2)}`}</span><span className={classNames("rounded-full px-2 py-1 text-[10px] font-bold uppercase", order.status === "new" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600")}>{order.status}</span></div>
               </button>
             ))}
-            {!orders.length && !loading && <div className="px-5 py-10 text-center"><ShoppingCart className="mx-auto text-slate-300" size={28} /><div className="mt-3 text-sm font-semibold text-slate-700">No orders yet</div><p className="mt-1 text-xs text-slate-500">New WhatsApp and Messenger orders will appear here.</p></div>}
+            {!orders.length && !loading && <div className="px-5 py-10 text-center"><ShoppingCart className="mx-auto text-slate-300" size={28} /><div className="mt-3 text-sm font-semibold text-slate-700">No orders yet</div><p className="mt-1 text-xs text-slate-500">New website, WhatsApp, and Messenger orders will appear here.</p></div>}
             {loading && <div className="px-5 py-10 text-center text-sm text-slate-400">Loading business activity…</div>}
           </div>
         </div>

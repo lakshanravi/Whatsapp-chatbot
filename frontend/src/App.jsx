@@ -9,7 +9,6 @@ import {
   Loader2,
   MessageSquare,
   MessagesSquare,
-  Package,
   Pencil,
   Plus,
   RefreshCcw,
@@ -22,7 +21,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { AdminShell } from "./components/AdminShell";
 import { LoginPage } from "./components/LoginPage";
 import { CommercePanel } from "./components/CommercePanel";
@@ -163,6 +162,7 @@ export default function App() {
   const [chatSessionId, setChatSessionId] = useState("");
   const [chatResult, setChatResult] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+  const chatMessagesEndRef = useRef(null);
   const [widgetKeyResult, setWidgetKeyResult] = useState(null);
   const [widgetApiKeyInput, setWidgetApiKeyInput] = useState("");
   const [widgetEmbedMode, setWidgetEmbedMode] = useState("all");
@@ -216,7 +216,6 @@ export default function App() {
     : [
         { id: "dashboard", label: "Dashboard", icon: Activity },
         { id: "orders", label: "Orders", icon: ShoppingCart },
-        { id: "products", label: "Catalogue", icon: Package },
         { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
         { id: "messenger", label: "Messenger", icon: MessagesSquare },
         { id: "sms", label: "SMS", icon: MessageSquare },
@@ -228,7 +227,6 @@ export default function App() {
   const companyDashboardNav = [
     { id: "dashboard", label: "Overview", icon: Activity },
     { id: "orders", label: "Orders", icon: ShoppingCart },
-    { id: "products", label: "Catalogue", icon: Package },
     { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
     { id: "messenger", label: "Messenger", icon: MessagesSquare },
     { id: "sms", label: "SMS", icon: MessageSquare },
@@ -1204,10 +1202,13 @@ ${widgetScriptSrc()}`;
     }
   }
 
-  async function handleChat(event) {
-    event.preventDefault();
-    if (!selectedCompany || !chatMessage.trim()) return;
-    const sentMessage = chatMessage.trim();
+  useEffect(() => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [chatMessages, loading.chat]);
+
+  async function sendTestChatMessage(value) {
+    if (!selectedCompany || !String(value || "").trim() || loading.chat) return;
+    const sentMessage = String(value).trim();
     const payload = { message: sentMessage };
     if (chatSessionId.trim()) payload.sessionId = chatSessionId.trim();
     const result = await runTask("chat", () => api.chat.ask(selectedCompany._id, payload));
@@ -1217,16 +1218,28 @@ ${widgetScriptSrc()}`;
       setChatMessage("");
       try {
         const history = await api.chat.history(selectedCompany._id, result.sessionId);
-        setChatMessages(history.messages || []);
+        const messages = [...(history.messages || [])];
+        if (result.suggestions?.length && messages.length) {
+          messages[messages.length - 1] = {
+            ...messages[messages.length - 1],
+            suggestions: result.suggestions,
+          };
+        }
+        setChatMessages(messages);
       } catch {
         setChatMessages((current) => [
           ...current,
           { role: "user", content: sentMessage },
-          { role: "assistant", content: result.answer, sources: result.sources || [], media: result.media || [] },
+          { role: "assistant", content: result.answer, sources: result.sources || [], media: result.media || [], suggestions: result.suggestions || [] },
         ]);
       }
       await loadConversations();
     }
+  }
+
+  async function handleChat(event) {
+    event.preventDefault();
+    await sendTestChatMessage(chatMessage);
   }
 
   async function handleBulkReindexDocuments() {
@@ -1920,7 +1933,7 @@ ${widgetScriptSrc()}`;
                 />
               )}
 
-              {["products", "orders", "messenger"].includes(activeSection) && (
+              {["orders", "messenger"].includes(activeSection) && (
                 <CommercePanel companyId={selectedCompany._id} section={activeSection} />
               )}
 
@@ -2987,46 +3000,28 @@ ${widgetScriptSrc()}`;
                 )}
 
                 {isSuperAdmin && activeSection === "chat" && (
-                <section className="bg-white border rounded border-slate-200">
-                  <div className="px-4 py-3 border-b border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare size={18} />
-                      <h2 className="font-semibold text-slate-950">Chat Test</h2>
-                    </div>
-                  </div>
-                  <form className="p-4 space-y-3" onSubmit={handleChat}>
-                    <Field label="Session ID optional">
-                      <TextInput
-                        value={chatSessionId}
-                        onChange={(event) => setChatSessionId(event.target.value)}
-                        placeholder="Leave empty for new session"
-                      />
-                    </Field>
-                    <Field label="Message">
-                      <TextArea
-                        value={chatMessage}
-                        onChange={(event) => setChatMessage(event.target.value)}
-                        placeholder="Ask from uploaded documents"
-                        required
-                      />
-                    </Field>
-                    <div className="flex gap-2">
-                      <PrimaryButton type="submit" className="flex-1" disabled={loading.chat}>
-                        {loading.chat ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-                        Send
-                      </PrimaryButton>
-                      <SecondaryButton type="button" onClick={handleNewChatSession}>
-                        New session
-                      </SecondaryButton>
-                    </div>
-                  </form>
-                  {chatMessages.length > 0 && (
-                    <div className="border-t border-slate-200 bg-slate-50/70 p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversation</div>
-                        <div className="max-w-[70%] truncate text-xs text-slate-500">Session: {chatSessionId}</div>
+                <section className="mx-auto flex h-[min(760px,calc(100vh-190px))] min-h-[560px] max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><Bot size={20} /></span>
+                      <div className="min-w-0">
+                        <h2 className="font-semibold text-slate-950">Pentarix AI Assistant</h2>
+                        <p className="truncate text-xs text-slate-500">{chatSessionId ? `Session ${chatSessionId}` : "New test conversation"}</p>
                       </div>
-                      <div className="max-h-[560px] space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
+                    </div>
+                    <SecondaryButton type="button" onClick={handleNewChatSession}>New chat</SecondaryButton>
+                  </div>
+
+                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[#f4f7f6] px-4 py-5 sm:px-6">
+                    {chatMessages.length === 0 && (
+                      <div className="flex h-full flex-col items-center justify-center text-center">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm"><MessagesSquare size={25} /></span>
+                        <h3 className="mt-4 font-semibold text-slate-800">Start a customer conversation</h3>
+                        <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">Test language selection, product discovery, PDF answers and ordering in one continuous chat.</p>
+                      </div>
+                    )}
+                    {chatMessages.length > 0 && (
+                      <>
                         {chatMessages.map((message, messageIndex) => (
                           <div
                             key={`${message.role}-${messageIndex}`}
@@ -3055,12 +3050,56 @@ ${widgetScriptSrc()}`;
                                 ))}
                               </div>
                             )}
+                            {message.role === "assistant" && message.suggestions?.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                                {message.suggestions.map((suggestion) => (
+                                  <button
+                                    key={`${suggestion.label}-${suggestion.message}`}
+                                    type="button"
+                                    onClick={() => sendTestChatMessage(suggestion.message)}
+                                    disabled={loading.chat}
+                                    className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-100 disabled:opacity-50"
+                                  >
+                                    {suggestion.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
+                      </>
+                    )}
+                    {loading.chat && (
+                      <div className="flex w-16 items-center justify-center gap-1 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-4 shadow-sm">
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
                       </div>
-                      {chatResult?.diagnostics && <ChatDiagnostics diagnostics={chatResult.diagnostics} />}
+                    )}
+                    <div ref={chatMessagesEndRef} />
+                  </div>
+
+                  <form className="border-t border-slate-200 bg-white p-3 sm:p-4" onSubmit={handleChat}>
+                    <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 transition focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10">
+                      <textarea
+                        value={chatMessage}
+                        onChange={(event) => setChatMessage(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            if (chatMessage.trim()) event.currentTarget.form?.requestSubmit();
+                          }
+                        }}
+                        placeholder="Type a message…"
+                        rows={1}
+                        className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                      />
+                      <button type="submit" disabled={loading.chat || !chatMessage.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message">
+                        {loading.chat ? <Loader2 className="animate-spin" size={17} /> : <Send size={17} />}
+                      </button>
                     </div>
-                  )}
+                    <p className="mt-2 text-center text-[11px] text-slate-400">Enter to send · Shift + Enter for a new line</p>
+                  </form>
                 </section>
                 )}
               </div>

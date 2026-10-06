@@ -43,7 +43,7 @@ export function LoginPage({ loginForm, setLoginForm, loading, error, handleLogin
               Turn every customer conversation into an opportunity.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-              Manage products, automate multilingual support, and fulfil orders from WhatsApp and Messenger—all from one calm, focused workspace.
+              Use your PDF knowledge, automate multilingual support, and fulfil orders from web, WhatsApp, and Messenger—all from one calm, focused workspace.
             </p>
 
             <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">

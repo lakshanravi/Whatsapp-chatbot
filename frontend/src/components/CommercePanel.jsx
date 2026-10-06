@@ -222,8 +222,8 @@ function OrderManagement({ companyId }) {
                 <tr key={order._id} className={order.status === "new" ? "bg-amber-50/60" : ""}>
                   <td className="px-4 py-4"><div className="font-semibold">{order.orderNumber}</div><div className="text-xs text-slate-500">{formatDate(order.createdAt)}</div></td>
                   <td className="px-4 py-4"><div>{order.customer?.name}</div><div className="text-xs text-slate-500">{order.customer?.phone || "No phone"}</div><div className="max-w-56 truncate text-xs text-slate-400">{order.customer?.deliveryAddress}</div></td>
-                  <td className="px-4 py-4">{order.items?.map((item) => <div key={`${item.productId}-${item.variant}`}>{item.quantity} × {item.name}{item.variant ? ` (${item.variant})` : ""}</div>)}</td>
-                  <td className="px-4 py-4 font-semibold">{order.currency} {Number(order.total).toFixed(2)}<div className="text-xs font-normal text-slate-500">{order.paymentMethod}</div></td>
+                  <td className="px-4 py-4">{order.items?.map((item, index) => <div key={`${item.productId || item.name}-${item.variant}-${index}`}>{item.quantity} × {item.name}{item.variant ? ` (${item.variant})` : ""}</div>)}</td>
+                  <td className="px-4 py-4 font-semibold">{order.priceStatus === "pending" ? "Seller to confirm" : `${order.currency} ${Number(order.total).toFixed(2)}`}<div className="text-xs font-normal text-slate-500">{order.paymentMethod}</div></td>
                   <td className="px-4 py-4 capitalize">{order.channel}<div className="text-xs uppercase text-slate-400">{order.language}</div></td>
                   <td className="px-4 py-4"><select className="h-9 rounded-md border border-slate-200 bg-white px-2" value={order.status} onChange={(e) => setOrderStatus(order._id, e.target.value)}>{statuses.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
                 </tr>

@@ -2,13 +2,13 @@ const mongoose = require("mongoose");
 
 const orderItemSchema = new mongoose.Schema(
   {
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", default: null },
     sku: { type: String, default: "" },
     name: { type: String, required: true },
     variant: { type: String, default: "" },
     quantity: { type: Number, required: true, min: 1 },
-    unitPrice: { type: Number, required: true, min: 0 },
-    lineTotal: { type: Number, required: true, min: 0 },
+    unitPrice: { type: Number, default: 0, min: 0 },
+    lineTotal: { type: Number, default: 0, min: 0 },
   },
   { _id: false }
 );
@@ -43,6 +43,12 @@ const orderSchema = new mongoose.Schema(
     total: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "LKR" },
     paymentMethod: { type: String, required: true },
+    priceStatus: {
+      type: String,
+      enum: ["pending", "confirmed"],
+      default: "pending",
+      index: true,
+    },
     notes: { type: String, default: "" },
     status: {
       type: String,

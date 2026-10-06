@@ -47,7 +47,8 @@ async function processCustomerMessage({ companyId, sessionId, channel, text, cus
   const fallbackMedia = await findQuestionMedia(companyId, text);
   const { sources } = mapped;
   const media = mapped.media.length ? mapped.media : fallbackMedia;
-  const answer = ragResult.answer || "I could not find an answer for that yet.";
+  const ragAnswer = ragResult.answer || "";
+  const answer = ragAnswer || "I could not find an answer for that yet.";
   ragClient.updateConversationRagContext(conversation, ragResult);
   conversation.messages.push({ role: "assistant", content: answer, sources, media });
   await conversation.save();

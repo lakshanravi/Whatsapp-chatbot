@@ -11,7 +11,6 @@ import { classNames } from "../utils/classNames";
 const sectionDescriptions = {
   dashboard: "Your business activity and channel health at a glance.",
   companies: "Manage seller workspaces and access.",
-  products: "Keep the catalogue customers can discover and order from up to date.",
   orders: "Review incoming orders and move them through fulfilment.",
   whatsapp: "Connect and manage the seller's WhatsApp Business account.",
   messenger: "Connect a Facebook Page for automated conversations and orders.",
@@ -28,7 +27,6 @@ const sectionDescriptions = {
 const groupForSection = {
   dashboard: "Overview",
   orders: "Commerce",
-  products: "Commerce",
   whatsapp: "Channels",
   messenger: "Channels",
   sms: "Channels",

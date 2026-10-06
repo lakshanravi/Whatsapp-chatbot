@@ -10,14 +10,23 @@ async function integrationForPage(pageId) {
   return integration;
 }
 
-async function sendText({ recipientId, text, integration }) {
+async function sendText({ recipientId, text, integration, suggestions = [] }) {
   const version = String(config.graphApiVersion || "v20.0").replace(/^v?/, "v");
   const response = await axios.post(
     `https://graph.facebook.com/${version}/me/messages`,
     {
       recipient: { id: recipientId },
       messaging_type: "RESPONSE",
-      message: { text: String(text).slice(0, 2000) },
+      message: {
+        text: String(text).slice(0, 2000),
+        ...(suggestions.length ? {
+          quick_replies: suggestions.slice(0, 13).map((suggestion, index) => ({
+            content_type: "text",
+            title: String(suggestion.label).slice(0, 20),
+            payload: `choice_${index + 1}`,
+          })),
+        } : {}),
+      },
     },
     { params: { access_token: integration.getPageAccessToken() } }
   );
@@ -51,6 +60,7 @@ async function replyToMessage(message) {
     recipientId: message.senderId,
     text: result.answer,
     integration,
+    suggestions: result.suggestions || [],
   });
   const mediaResults = [];
   for (const media of (result.media || []).slice(0, 3)) {

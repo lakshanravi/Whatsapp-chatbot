@@ -3,15 +3,19 @@ const crypto = require("crypto");
 const Company = require("../models/Company");
 const Conversation = require("../models/Conversation");
 const Order = require("../models/Order");
-const Product = require("../models/Product");
 
 const LANGUAGE_NAMES = { en: "English", si: "සිංහල", ta: "தமிழ்" };
+const LANGUAGE_SUGGESTIONS = [
+  { label: "සිංහල", message: "සිංහල" },
+  { label: "English", message: "English" },
+  { label: "தமிழ்", message: "தமிழ்" },
+];
 
 const COPY = {
   en: {
-    chooseLanguage: "Please choose your preferred language:\n1. සිංහල\n2. English\n3. தமிழ்",
+    chooseLanguage: "Please choose your preferred language:",
     welcome: "English selected. You can ask a product question or type ‘order’ to place an order.",
-    askProduct: "Which product would you like to order? Send its name, SKU, or number from the list.",
+    askProduct: "Which product would you like to order? Choose a suggested product or send the product name shown in the PDF information.",
     noProducts: "There are no products available for ordering right now.",
     noProductMatch: "I couldn't identify that product. Please send its name, SKU, or list number.",
     askVariant: "Choose an option:",
@@ -21,14 +25,14 @@ const COPY = {
     askPhone: "What phone number should the seller use for this order?",
     askAddress: "What is the delivery address?",
     askPayment: "Choose a payment method:",
-    confirm: "Please check your order:\n{summary}\n\nReply CONFIRM to place it, CHANGE to start again, or CANCEL.",
+    confirm: "Please check your order:\n{summary}\n\nChoose Confirm to place it, Change to start again, or Cancel.",
     cancelled: "The draft order was cancelled. You can type ‘order’ whenever you're ready.",
     restarted: "Let's update the order. Which product would you like?",
     confirmed: "Thank you. Your order {orderNumber} has been placed successfully. The seller will process it soon.",
     unavailable: "That option is currently unavailable. Please choose another one.",
   },
   si: {
-    chooseLanguage: "කරුණාකර ඔබ කැමති භාෂාව තෝරන්න:\n1. සිංහල\n2. English\n3. தமிழ்",
+    chooseLanguage: "කරුණාකර ඔබ කැමති භාෂාව තෝරන්න:",
     welcome: "සිංහල තෝරා ගත්තා. භාණ්ඩයක් ගැන ප්‍රශ්නයක් අසන්න හෝ ඇණවුමක් කිරීමට ‘ඇණවුම’ ලෙස එවන්න.",
     askProduct: "ඔබ ඇණවුම් කිරීමට කැමති භාණ්ඩයේ නම, SKU අංකය හෝ ලැයිස්තු අංකය එවන්න.",
     noProducts: "දැනට ඇණවුම් කිරීමට භාණ්ඩ නොමැත.",
@@ -47,7 +51,7 @@ const COPY = {
     unavailable: "එම විකල්පය දැනට නොමැත. වෙනත් එකක් තෝරන්න.",
   },
   ta: {
-    chooseLanguage: "உங்களுக்கு விருப்பமான மொழியைத் தேர்ந்தெடுக்கவும்:\n1. සිංහල\n2. English\n3. தமிழ்",
+    chooseLanguage: "உங்களுக்கு விருப்பமான மொழியைத் தேர்ந்தெடுக்கவும்:",
     welcome: "தமிழ் தேர்ந்தெடுக்கப்பட்டது. ஒரு தயாரிப்பைப் பற்றி கேட்கலாம் அல்லது ஆர்டர் செய்ய ‘ஆர்டர்’ என்று அனுப்பலாம்.",
     askProduct: "நீங்கள் ஆர்டர் செய்ய விரும்பும் தயாரிப்பின் பெயர், SKU அல்லது பட்டியல் எண்ணை அனுப்பவும்.",
     noProducts: "தற்போது ஆர்டர் செய்ய தயாரிப்புகள் இல்லை.",
@@ -92,28 +96,10 @@ function localizedText(value, language = "en") {
   return value[language] || value.en || value.si || value.ta || "";
 }
 
-function formatMoney(value, currency) {
-  return `${currency || "LKR"} ${Number(value || 0).toFixed(2)}`;
-}
-
-function numbered(values) {
-  return values.map((value, index) => `${index + 1}. ${value}`).join("\n");
-}
-
 function isOrderIntent(text) {
   return /\b(order|buy|purchase|checkout)\b/i.test(text)
     || /(ඇණවුම|මිලදී|ගන්න)/u.test(text)
     || /(ஆர்டர்|வாங்க|கொள்முதல்)/u.test(text);
-}
-
-function isCatalogIntent(text) {
-  return /\b(products?|catalog|menu|items?)\b/i.test(text)
-    || /(භාණ්ඩ|නිෂ්පාදන|ලැයිස්තුව)/u.test(text)
-    || /(தயாரிப்பு|பொருட்கள்|பட்டியல்)/u.test(text);
-}
-
-function isProductInfoIntent(text) {
-  return /\b(image|images|photo|photos|picture|pictures|variant|variants|variation|variations|colou?r|colou?rs|price|stock|available)\b/i.test(text);
 }
 
 function isCancel(text) {
@@ -147,39 +133,8 @@ async function addReply(conversation, answer, extra = {}) {
   return { handled: true, answer, sources: [], conversation, ...extra };
 }
 
-async function listProducts(companyId, language) {
-  const products = await Product.find({ companyId, isActive: true }).sort({ updatedAt: -1 }).limit(20);
-  const lines = products.map((product) => {
-    const stockText = product.stock === 0 ? " (out of stock)" : "";
-    return `${localizedText(product.name, language)} — ${formatMoney(product.price, product.currency)}${stockText}`;
-  });
-  return { products, text: numbered(lines) };
-}
-
-function findProduct(products, text, language) {
-  const index = choiceIndex(text, products.length);
-  if (index >= 0) return products[index];
-  const wanted = normalize(text);
-  const exact = products.find((product) =>
-    normalize(product.sku) === wanted
-    || ["en", "si", "ta"].some((lang) => normalize(product.name?.[lang]) === wanted)
-  );
-  if (exact) return exact;
-  const matches = products.filter((product) => {
-    const values = [product.sku, product.name?.[language], product.name?.en, product.name?.si, product.name?.ta]
-      .map(normalize)
-      .filter(Boolean);
-    return values.some((value) => value.includes(wanted) || wanted.includes(value));
-  });
-  return matches.length === 1 ? matches[0] : null;
-}
-
 function orderSummary(draft, language, settings) {
-  const currency = draft.currency || settings.currency || "LKR";
-  const unitPrice = Number(draft.unitPrice || 0);
   const quantity = Number(draft.quantity || 0);
-  const subtotal = unitPrice * quantity;
-  const deliveryFee = Number(settings.deliveryFee || 0);
   const labels = language === "si"
     ? ["භාණ්ඩය", "ප්‍රමාණය", "නම", "දුරකථනය", "ලිපිනය", "ගෙවීම", "මුළු එකතුව"]
     : language === "ta"
@@ -192,13 +147,13 @@ function orderSummary(draft, language, settings) {
     `${labels[3]}: ${draft.customerPhone || "-"}`,
     `${labels[4]}: ${draft.deliveryAddress}`,
     `${labels[5]}: ${draft.paymentMethod}`,
-    `${labels[6]}: ${formatMoney(subtotal + deliveryFee, currency)}`,
+    `${labels[6]}: ${language === "si" ? "විකුණුම්කරු තහවුරු කරනු ඇත" : language === "ta" ? "விற்பனையாளர் உறுதிப்படுத்துவார்" : "Seller will confirm"}`,
   ].join("\n");
 }
 
 function hasCompleteDraft(draft) {
   return Boolean(
-    draft.productId
+    draft.productName
     && Number.isInteger(Number(draft.quantity))
     && Number(draft.quantity) > 0
     && draft.customerName
@@ -244,7 +199,9 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
 
   if (!conversation.preferredLanguage) {
     const requestedLanguage = detectLanguage(message);
-    if (!requestedLanguage) return addReply(conversation, COPY.en.chooseLanguage);
+    if (!requestedLanguage) {
+      return addReply(conversation, COPY.en.chooseLanguage, { suggestions: LANGUAGE_SUGGESTIONS });
+    }
     conversation.preferredLanguage = requestedLanguage;
     resetDraft(conversation);
     return addReply(conversation, COPY[requestedLanguage].welcome, { language: requestedLanguage });
@@ -268,81 +225,26 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
   }
 
   if (state.stage === "browsing") {
-    if (isCatalogIntent(message)) {
-      const catalog = await listProducts(companyId, language);
-      return addReply(conversation, catalog.products.length ? catalog.text : copy.noProducts);
-    }
-    if (isProductInfoIntent(message)) {
-      const catalog = await listProducts(companyId, language);
-      const product = findProduct(catalog.products, message, language);
-      if (product) {
-        const name = localizedText(product.name, language);
-        const variants = product.variants.filter((item) => item.isActive && item.stock !== 0).map((item) => item.name);
-        const stock = product.stock === null || product.stock === undefined ? "Unlimited" : String(product.stock);
-        const labels = language === "si"
-          ? { price: "මිල", stock: "තොගය", variants: "විකල්ප" }
-          : language === "ta"
-            ? { price: "விலை", stock: "கையிருப்பு", variants: "வகைகள்" }
-            : { price: "Price", stock: "Stock", variants: "Variants" };
-        return addReply(conversation, [
-          name,
-          `${labels.price}: ${formatMoney(product.price, product.currency)}`,
-          `${labels.stock}: ${stock}`,
-          `${labels.variants}: ${variants.length ? variants.join(", ") : "-"}`,
-        ].join("\n"));
-      }
-    }
     if (!settings.orderingEnabled || !isOrderIntent(message)) {
       await conversation.save();
       return { handled: false, conversation, language };
     }
-    const catalog = await listProducts(companyId, language);
-    if (!catalog.products.length) return addReply(conversation, copy.noProducts);
+    const knownProducts = [...new Set(conversation.ragContext?.productNames || [])].slice(0, 3);
     state.stage = "awaiting_product";
     state.draft = {};
     conversation.commerceState = state;
-    return addReply(conversation, `${copy.askProduct}\n\n${catalog.text}`);
+    return addReply(conversation, copy.askProduct, {
+      suggestions: knownProducts.map((name) => ({ label: name, message: name })),
+    });
   }
 
   if (state.stage === "awaiting_product") {
-    const catalog = await listProducts(companyId, language);
-    const product = findProduct(catalog.products, message, language);
-    if (!product || product.stock === 0) {
-      return addReply(conversation, `${product ? copy.unavailable : copy.noProductMatch}\n\n${catalog.text}`);
-    }
+    if (message.length < 2) return addReply(conversation, copy.noProductMatch);
     Object.assign(draft, {
-      productId: product._id.toString(),
-      sku: product.sku,
-      productName: localizedText(product.name, language),
-      unitPrice: product.price,
-      currency: product.currency,
+      productName: message.slice(0, 200),
+      unitPrice: 0,
+      currency: settings.currency || "LKR",
     });
-    const variants = product.variants.filter((variant) => variant.isActive && variant.stock !== 0);
-    if (variants.length) {
-      draft.variants = variants.map((variant) => ({
-        id: variant._id.toString(),
-        name: variant.name,
-        priceAdjustment: variant.priceAdjustment || 0,
-      }));
-      state.stage = "awaiting_variant";
-      state.draft = draft;
-      return addReply(conversation, `${copy.askVariant}\n${numbered(variants.map((variant) => variant.name))}`);
-    }
-    state.stage = "awaiting_quantity";
-    state.draft = draft;
-    return addReply(conversation, copy.askQuantity);
-  }
-
-  if (state.stage === "awaiting_variant") {
-    const variants = draft.variants || [];
-    const index = choiceIndex(message, variants.length);
-    const variant = index >= 0
-      ? variants[index]
-      : variants.find((item) => normalize(item.name) === normalize(message));
-    if (!variant) return addReply(conversation, `${copy.unavailable}\n${numbered(variants.map((item) => item.name))}`);
-    draft.variant = variant.name;
-    draft.unitPrice = Number(draft.unitPrice) + Number(variant.priceAdjustment || 0);
-    delete draft.variants;
     state.stage = "awaiting_quantity";
     state.draft = draft;
     return addReply(conversation, copy.askQuantity);
@@ -404,14 +306,18 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     draft.paymentMethods = methods;
     state.stage = "awaiting_payment";
     state.draft = draft;
-    return addReply(conversation, `${copy.askPayment}\n${numbered(methods)}`);
+    return addReply(conversation, copy.askPayment, {
+      suggestions: methods.map((method) => ({ label: method, message: method })),
+    });
   }
 
   if (state.stage === "awaiting_payment") {
     const methods = draft.paymentMethods || ["Cash on delivery"];
     const index = choiceIndex(message, methods.length);
     const method = index >= 0 ? methods[index] : methods.find((item) => normalize(item) === normalize(message));
-    if (!method) return addReply(conversation, `${copy.askPayment}\n${numbered(methods)}`);
+    if (!method) return addReply(conversation, copy.askPayment, {
+      suggestions: methods.map((item) => ({ label: item, message: item })),
+    });
     draft.paymentMethod = method;
     delete draft.paymentMethods;
     if (!hasCompleteDraft(draft)) {
@@ -421,7 +327,9 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     state.stage = "awaiting_confirmation";
     state.draft = draft;
     const summary = orderSummary(draft, language, settings);
-    return addReply(conversation, copy.confirm.replace("{summary}", summary));
+    return addReply(conversation, copy.confirm.replace("{summary}", summary), {
+      suggestions: ["Confirm", "Change", "Cancel"].map((item) => ({ label: item, message: item })),
+    });
   }
 
   if (state.stage === "awaiting_confirmation") {
@@ -431,14 +339,16 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     }
     if (!isConfirm(message)) {
       const summary = orderSummary(draft, language, settings);
-      return addReply(conversation, copy.confirm.replace("{summary}", summary));
+      return addReply(conversation, copy.confirm.replace("{summary}", summary), {
+        suggestions: ["Confirm", "Change", "Cancel"].map((item) => ({ label: item, message: item })),
+      });
     }
     if (!hasCompleteDraft(draft)) {
       resetDraft(conversation, "awaiting_product");
       return addReply(conversation, copy.restarted);
     }
-    const subtotal = Number(draft.unitPrice) * Number(draft.quantity);
-    const deliveryFee = Number(settings.deliveryFee || 0);
+    const subtotal = 0;
+    const deliveryFee = 0;
     const order = await Order.create({
       companyId,
       orderNumber: await createOrderNumber(),
@@ -453,8 +363,7 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
         deliveryAddress: draft.deliveryAddress,
       },
       items: [{
-        productId: draft.productId,
-        sku: draft.sku,
+        sku: draft.sku || "",
         name: draft.productName,
         variant: draft.variant || "",
         quantity: draft.quantity,
@@ -466,6 +375,7 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
       total: subtotal + deliveryFee,
       currency: draft.currency || settings.currency || "LKR",
       paymentMethod: draft.paymentMethod,
+      priceStatus: "pending",
     });
     resetDraft(conversation);
     return addReply(

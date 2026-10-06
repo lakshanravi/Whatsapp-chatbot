@@ -127,6 +127,7 @@ async function createRagReply(incomingMessage) {
     answer: result.answer,
     sources: result.sources || [],
     media: result.media || [],
+    suggestions: result.suggestions || [],
     conversationId: result.conversation?._id,
     orderId: result.order?._id,
     sessionId,
@@ -194,6 +195,26 @@ async function sendImageMessage({ to, imageUrl, caption = "", integration }) {
   return response.data;
 }
 
+async function sendChoiceMessage({ to, text, suggestions, integration }) {
+  const accessToken = integration.getAccessToken();
+  const buttons = suggestions.slice(0, 3).map((suggestion, index) => ({
+    type: "reply",
+    reply: { id: `choice_${index + 1}`, title: String(suggestion.label).slice(0, 20) },
+  }));
+  const response = await axios.post(
+    buildMessagesUrl(integration.phoneNumberId),
+    {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: String(to).trim(),
+      type: "interactive",
+      interactive: { type: "button", body: { text: String(text).slice(0, 1024) }, action: { buttons } },
+    },
+    { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
+  );
+  return response.data;
+}
+
 async function validateIntegration({ companyId }) {
   const integration = await getIntegrationByCompanyId(companyId);
   const accessToken = integration.getAccessToken();
@@ -231,11 +252,18 @@ async function replyToIncomingMessage(incomingMessage) {
   const integration =
     reply.integration || (await getIntegrationByPhoneNumberId(incomingMessage.phoneNumberId));
 
-  const metaResult = await sendTextMessage({
-    to: incomingMessage.senderPhoneNumber,
-    text: reply.answer,
-    integration,
-  });
+  const metaResult = reply.suggestions?.length
+    ? await sendChoiceMessage({
+      to: incomingMessage.senderPhoneNumber,
+      text: reply.answer,
+      suggestions: reply.suggestions,
+      integration,
+    })
+    : await sendTextMessage({
+      to: incomingMessage.senderPhoneNumber,
+      text: reply.answer,
+      integration,
+    });
   const mediaResults = [];
   for (const media of (reply.media || []).slice(0, 3)) {
     mediaResults.push(await sendImageMessage({
@@ -263,5 +291,6 @@ module.exports = {
   replyToIncomingMessage,
   sendTextMessage,
   sendImageMessage,
+  sendChoiceMessage,
   validateIntegration,
 };

@@ -351,7 +351,7 @@ router.post("/", async (req, res) => {
         answer: commerce.answer,
         sources: commerce.sources || [],
         media: commerceMedia,
-        suggestions: [],
+        suggestions: commerce.suggestions || [],
         conversationId: conversation._id,
         language: commerce.language || conversation.preferredLanguage || "",
         order: commerce.order || null,
@@ -421,9 +421,11 @@ router.post("/", async (req, res) => {
 
     ragClient.updateConversationRagContext(conversation, ragResult);
 
+    const ragAnswer = ragResult.answer || "";
+    const combinedAnswer = ragAnswer || "I could not find an answer for that yet.";
     conversation.messages.push({
       role: "assistant",
-      content: ragResult.answer,
+      content: combinedAnswer,
       sources,
       media,
       diagnostics,
@@ -433,7 +435,7 @@ router.post("/", async (req, res) => {
 
     res.json({
       sessionId: sid,
-      answer: ragResult.answer,
+      answer: combinedAnswer,
       sources,
       media,
       suggestions: ragResult.suggestions || [],
