@@ -201,24 +201,44 @@ function typingNode() {
   return node;
 }
 
+function friendlyChatError(status, data, cause) {
+  const detail = String(data?.detail || data?.error || cause?.message || "").toLowerCase();
+  if (!status || detail.includes("failed to fetch") || detail.includes("networkerror")) {
+    return "I can't connect to the support service right now. Please check your connection and try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "This assistant is not available on this website right now. Please contact the business directly.";
+  }
+  if (status === 429) return "I'm receiving many requests right now. Please wait a moment and try again.";
+  if (status === 502 || status === 503 || status === 504 || status >= 500) {
+    return "I couldn't complete that request right now. Please try again in a moment.";
+  }
+  return "I couldn't send your message. Please check it and try again.";
+}
+
 async function sendMessage(config, message, sessionId, { isSuggestion = false } = {}) {
-  const response = await fetch(`${config.apiBaseUrl}/widget/companies/${config.companyId}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Widget-API-Key": config.apiKey,
-    },
-    body: JSON.stringify({
-      message,
-      sessionId,
-      customerName: config.customerName || "",
-      customerEmail: config.customerEmail || "",
-      customerPhone: config.customerPhone || "",
-      isSuggestion,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(`${config.apiBaseUrl}/widget/companies/${config.companyId}/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Widget-API-Key": config.apiKey,
+      },
+      body: JSON.stringify({
+        message,
+        sessionId,
+        customerName: config.customerName || "",
+        customerEmail: config.customerEmail || "",
+        customerPhone: config.customerPhone || "",
+        isSuggestion,
+      }),
+    });
+  } catch (cause) {
+    throw new Error(friendlyChatError(0, null, cause));
+  }
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Chat request failed");
+  if (!response.ok) throw new Error(friendlyChatError(response.status, data));
   return data;
 }
 
@@ -232,7 +252,7 @@ async function loadHistory(config, sessionId) {
     }
   );
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Chat history request failed");
+  if (!response.ok) throw new Error(friendlyChatError(response.status, data));
   return data;
 }
 

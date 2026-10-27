@@ -1090,8 +1090,11 @@ ${widgetScriptSrc()}`;
         setNotice(successParts.join(", "));
       }
       if (failures.length > 0) {
-        const failedNames = failures.map(({ fileName }) => fileName).join(", ");
-        setError(`${failures.length} upload${failures.length === 1 ? "" : "s"} failed: ${failedNames}`);
+        const failureDetails = failures
+          .slice(0, 3)
+          .map(({ fileName, message }) => `${fileName}: ${message}`)
+          .join(" • ");
+        setError(`${failures.length} upload${failures.length === 1 ? "" : "s"} failed. ${failureDetails}`);
       }
     } catch (err) {
       console.error("[task] error refreshing documents", err);

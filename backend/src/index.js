@@ -72,17 +72,26 @@ app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/sms", smsRoutes);
 app.use("/api/messenger", messengerRoutes);
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
+  const reference = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  console.error(`[${reference}] ${req.method} ${req.originalUrl}:`, err);
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: err.message });
+    const message = err.code === "LIMIT_FILE_SIZE"
+      ? "This PDF is too large. Choose a file smaller than 20 MB."
+      : "The selected file could not be uploaded. Check the file and try again.";
+    return res.status(400).json({ error: message, code: err.code, reference });
   }
   if (err.message === "Only PDF files are allowed") {
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: "Please choose a PDF file.", code: "PDF_REQUIRED", reference });
   }
   if (err.message === "Only .zip backup files are allowed") {
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: "Please choose a ZIP backup file.", code: "ZIP_REQUIRED", reference });
   }
-  res.status(500).json({ error: err.message || "Internal server error" });
+  res.status(500).json({
+    error: "We couldn't complete this request right now. Please try again shortly.",
+    code: "INTERNAL_ERROR",
+    reference,
+  });
 });
 
 async function start() {

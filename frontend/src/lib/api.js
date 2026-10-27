@@ -12,25 +12,81 @@ export function getAuthToken() {
   return authToken;
 }
 
+function friendlyErrorMessage({ status = 0, data = {}, path = "", cause = null }) {
+  const technical = String(
+    data?.detail || data?.error || cause?.message || ""
+  ).toLowerCase();
+  const isDocumentRequest = path.includes("/documents");
+
+  if (!status || technical.includes("failed to fetch") || technical.includes("networkerror")) {
+    return "We couldn't connect to the server. Check that the backend is running, then try again.";
+  }
+  if (status === 401) return "Your session has expired. Please sign in again.";
+  if (status === 403) return "You don't have permission to perform this action.";
+  if (status === 404) return "The requested item could not be found. Refresh the page and try again.";
+  if (status === 409) {
+    return data?.duplicate
+      ? "This PDF is already in the knowledge base, so it was not uploaded again."
+      : "This change conflicts with existing data. Refresh the page and try again.";
+  }
+  if (status === 413 || technical.includes("file too large")) {
+    return "This file is too large. Choose a PDF smaller than 20 MB and try again.";
+  }
+  if (status === 429 || technical.includes("rate limit") || technical.includes("quota")) {
+    return "The AI service is temporarily busy or has reached its usage limit. Please wait a few minutes and try again.";
+  }
+  if (technical.includes("only pdf")) return "That file is not a PDF. Please choose a PDF document.";
+  if (technical.includes("no extractable text")) {
+    return "We couldn't read usable text from this PDF. Try a searchable PDF or a clearer scanned copy.";
+  }
+  if (technical.includes("pdf file missing") || technical.includes("file not found")) {
+    return "The stored PDF file is missing. Delete this entry and upload the document again.";
+  }
+  if (technical.includes("openai_api_key") || technical.includes("service key")) {
+    return "The knowledge service is not fully configured. Ask an administrator to check the AI service settings.";
+  }
+  if (technical.includes("timeout") || technical.includes("timed out") || status === 504) {
+    return isDocumentRequest
+      ? "This PDF is taking too long to process. Try a smaller PDF or split it into sections."
+      : "The request took too long. Please try again.";
+  }
+  if (isDocumentRequest && status >= 500) {
+    return "We couldn't process this PDF. The file may be too complex or the knowledge service may be temporarily unavailable. Try again, or upload a smaller section.";
+  }
+  if (status === 502 || status === 503) {
+    return "A required service is temporarily unavailable. Please wait a moment and try again.";
+  }
+  if (status >= 500) return "Something went wrong on our side. Please try again shortly.";
+  if (status === 400) return "Some information is missing or invalid. Check the form and try again.";
+  return "We couldn't complete that request. Please try again.";
+}
+
 async function request(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch (cause) {
+    const error = new Error(friendlyErrorMessage({ path, cause }));
+    error.status = 0;
+    error.path = path;
+    error.technicalMessage = cause?.message || "Network request failed";
+    throw error;
+  }
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json")
     ? await response.json()
     : await response.text();
 
   if (!response.ok) {
-    const message = typeof data === "string"
-      ? data
-      : data.detail && data.error && data.detail !== data.error
-        ? `${data.error}: ${data.detail}`
-        : data.detail || data.error || "Request failed";
-    const error = new Error(message);
+    const error = new Error(friendlyErrorMessage({ status: response.status, data, path }));
     error.status = response.status;
     error.data = data;
     error.path = path;
+    error.technicalMessage = typeof data === "string"
+      ? data
+      : data.detail || data.error || `HTTP ${response.status}`;
     throw error;
   }
 
@@ -43,7 +99,7 @@ async function download(path) {
   const response = await fetch(`${API_BASE_URL}${path}`, { headers });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(data?.error || data?.detail || "Download failed");
+    throw new Error(friendlyErrorMessage({ status: response.status, data, path }));
   }
   return response.blob();
 }
@@ -54,7 +110,7 @@ async function downloadToFile(path, fileHandle, onProgress) {
   const response = await fetch(`${API_BASE_URL}${path}`, { headers, cache: "no-store" });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(data?.error || data?.detail || "Download failed");
+    throw new Error(friendlyErrorMessage({ status: response.status, data, path }));
   }
   if (!response.body) throw new Error("Streaming downloads are not supported by this browser");
 
