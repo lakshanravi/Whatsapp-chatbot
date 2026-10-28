@@ -24,6 +24,17 @@ const messageSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    media: {
+      type: [{
+        url: String,
+        altText: String,
+        documentId: String,
+        documentName: String,
+        pageNumber: Number,
+        mimeType: String,
+      }],
+      default: [],
+    },
     feedback: {
       type: String,
       enum: ["helpful", "not_helpful", ""],
@@ -68,17 +79,6 @@ const conversationSchema = new mongoose.Schema(
       productNames: { type: [String], default: [] },
       modelIds: { type: [String], default: [] },
       documentIds: { type: [String], default: [] },
-    },
-    media: {
-      type: [{
-        url: String,
-        altText: String,
-        documentId: String,
-        documentName: String,
-        pageNumber: Number,
-        mimeType: String,
-      }],
-      default: [],
     },
     preferredLanguage: {
       type: String,

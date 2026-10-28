@@ -53,6 +53,29 @@ test("conversation schema supports Messenger language and order state", async ()
   assert.equal(conversation.preferredLanguage, "ta");
 });
 
+test("conversation messages preserve extracted PDF media", async () => {
+  const conversation = new Conversation({
+    companyId: "507f1f77bcf86cd799439011",
+    sessionId: "web-media-test",
+    channel: "web",
+    messages: [{
+      role: "assistant",
+      content: "The requested image is shown below.",
+      media: [{
+        url: "http://localhost:3000/media/company/document/image.png",
+        altText: "Product image",
+        documentId: "document",
+        documentName: "Visual Guide.pdf",
+        pageNumber: 1,
+        mimeType: "image/png",
+      }],
+    }],
+  });
+  await conversation.validate();
+  assert.equal(conversation.messages[0].media.length, 1);
+  assert.equal(conversation.messages[0].media[0].documentName, "Visual Guide.pdf");
+});
+
 test("PDF-only orders do not require a catalogue product or known price", async () => {
   const order = new Order({
     companyId: "507f1f77bcf86cd799439011",

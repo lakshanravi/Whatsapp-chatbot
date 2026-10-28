@@ -30,6 +30,8 @@ Rules:
 - Never ask a customer to provide this company's datasheet, manual, product specification, catalog record, or other company-owned information. Finding and maintaining company product information is the company's responsibility. When a company-product specification is unavailable, state that it is not currently available in the product information, ask only for customer-owned details that can still move the decision forward, and offer a verified company-catalog alternative only if relevant evidence for one was actually retrieved.
 - Do not claim that a product is the "latest", "newest", or currently available unless the supplied evidence contains a date, catalog status, or other support for that claim. When recency cannot be verified, offer the closest relevant products in the available catalog without presenting them as current releases.
 - When asked which models are available, list only identifiers explicitly presented as models in the source. Preserve their exact letters, digits, hyphens, slashes, and suffixes; never replace model IDs with voltage categories.
+- When asked what products the company has, list every distinct product explicitly named in the retrieved company documents. Do not answer that a list is unavailable when the context names one or more products.
+- The chat application can display images extracted from cited PDF pages. When the customer asks to see an image and visual-guide evidence is present, say that the relevant image is shown with the reply. Never say that you cannot show images or direct the customer to open the PDF themselves.
 - Return only a customer-facing answer. Never mention the draft, supplied context, verification, unsupported claims, or text that should be removed.
 - When the context does not support an answer, ask one concise clarification question. Do not claim that the customer must contact support.
 - Do NOT handle orders, bookings, payments, or transactions. If asked, politely explain you can only help with support questions from the knowledge base.
@@ -177,6 +179,7 @@ class RAGEngine:
         add("configuration", r"\b(?:configure|configuration|setting|settings|preset|profile|dial|switch position)\b")
         add("behavior", r"\b(?:what happens|behavou?r|turning on|turn on|charge|disconnect|terminals?|outputs?)\b")
         add("definition", r"\b(?:what is|what are|purpose|mean|means)\b")
+        add("product_list", r"\b(?:(?:what|which|list|show)\s+(?:all\s+)?products?|products?\s+(?:available|offered|do\s+(?:you|u)\s+have)|what\s+do\s+(?:you|u)\s+(?:have|sell))\b")
         if not modes:
             modes.append("fact_lookup")
         return modes
@@ -196,6 +199,7 @@ class RAGEngine:
             "behavior": "operation behavior protection load output",
             "comparison": "features specifications differences",
             "definition": "description purpose operation",
+            "product_list": "complete product catalog product names models SKU products offered available",
         }
         return [
             f"{question} {suffixes[mode]}"
@@ -965,12 +969,17 @@ class RAGEngine:
 
         k = top_k or settings.top_k
         answer_modes = self._answer_modes(question)
+        product_list_question = "product_list" in answer_modes
         retrieval_stats["top_k"] = k
         retrieval_stats["answer_modes"] = ", ".join(answer_modes)
         retrieval_stats["reranking_enabled"] = bool(settings.enable_reranking or self.cross_encoder)
         retrieval_stats["answer_verification_enabled"] = bool(settings.enable_answer_verification)
         retrieval_stats["numeric_verification_enabled"] = bool(settings.enable_numeric_verification)
         scoped_history = self._scope_history_to_current_topic(question, history or [])
+        if product_list_question:
+            # A catalog-wide discovery request must search every active document,
+            # not inherit the product or document scope from an earlier turn.
+            scoped_history = []
         retrieval_stats["history_messages_received"] = len(history or [])
         retrieval_stats["history_messages_used"] = len(scoped_history)
 
@@ -1013,7 +1022,7 @@ class RAGEngine:
             for item in (preferred_model_ids or [])
             if (normalized := normalize_model_id(item))
         }
-        required_model_ids = (
+        required_model_ids = set() if product_list_question else (
             explicit_model_ids
             or extract_model_ids(base_standalone_question)
             or (preferred_models if scoped_history else set())
@@ -1024,17 +1033,17 @@ class RAGEngine:
             for item in (preferred_product_names or [])
             if (normalized := normalize_product_name(item))
         }
-        required_product_names = (
+        required_product_names = set() if product_list_question else (
             explicit_product_names
             or extract_product_names(base_standalone_question)
             or (preferred_products if scoped_history else set())
         )
-        if not required_product_names and scoped_history:
+        if not product_list_question and not required_product_names and scoped_history:
             required_product_names = extract_product_names("\n".join(scoped_history))
         required_capacities = self._strict_capacity_signatures(
             base_standalone_question
         )
-        allowed_document_ids = (
+        allowed_document_ids = set() if product_list_question else (
             {
                 str(document_id).strip()
                 for document_id in (preferred_document_ids or [])
@@ -1548,6 +1557,20 @@ class RAGEngine:
                             + {"en": "English", "si": "Sinhala", "ta": "Tamil"}.get(response_language, "the customer's language")
                             + ". Keep product names, model identifiers, and cited source labels unchanged.\n\n"
                             if response_language else ""
+                        )
+                        + (
+                            "Product-list requirement: compile the distinct products named across "
+                            "all supplied source blocks. List their exact product names and include "
+                            "a short supported description when available. Do not claim that the "
+                            "product list is unavailable when any products are named below.\n\n"
+                            if product_list_question else ""
+                        )
+                        + (
+                            "Image-response requirement: the application will attach images from "
+                            "the cited PDF pages below this answer. Tell the customer the requested "
+                            "image is shown with the reply. Do not say you are unable to display "
+                            "images and do not instruct them to open the source PDF.\n\n"
+                            if self._is_visual_evidence_question(standalone_question) else ""
                         )
                         + (
                             "Comparison requirement: compare the named products clearly in natural "

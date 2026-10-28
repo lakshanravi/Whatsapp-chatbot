@@ -43,7 +43,13 @@ async function mapSourcesWithMedia(companyId, ragSources = []) {
 }
 
 const IMAGE_INTENT = /\b(image|images|photo|photos|picture|pictures|look like|show me|visual)\b/i;
-const STOP_WORDS = new Set(["show", "images", "image", "photos", "photo", "pictures", "picture", "some", "with", "have", "what", "does", "like", "look", "please", "give", "about", "that", "this", "also", "variations", "variants"]);
+const STOP_WORDS = new Set([
+  "show", "images", "image", "photos", "photo", "pictures", "picture",
+  "some", "with", "have", "what", "does", "like", "look", "please",
+  "give", "about", "that", "this", "also", "variations", "variants",
+  "the", "and", "for", "from", "need", "want", "can", "could", "would",
+  "product", "item", "its", "their", "our", "your",
+]);
 
 function searchTokens(question) {
   return [...new Set(String(question || "").toLowerCase().match(/[a-z0-9-]{3,}/g) || [])]
@@ -65,8 +71,10 @@ async function findQuestionMedia(companyId, question) {
       candidates.push({ score, document, item });
     }
   }
+  const bestScore = Math.max(0, ...candidates.map((candidate) => candidate.score));
   return candidates
-    .sort((left, right) => right.score - left.score)
+    .filter((candidate) => candidate.score === bestScore)
+    .sort((left, right) => Number(left.item.pageNumber) - Number(right.item.pageNumber))
     .slice(0, 3)
     .map(({ document, item }) => ({
       url: `${baseUrl()}/media/${companyId}/${document._id}/${encodeURIComponent(item.fileName)}`,
