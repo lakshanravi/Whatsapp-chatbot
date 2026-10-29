@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const Company = require("../models/Company");
 const Conversation = require("../models/Conversation");
 const Order = require("../models/Order");
+const ragClient = require("./ragClient");
 
 const LANGUAGE_NAMES = { en: "English", si: "සිංහල", ta: "தமிழ்" };
 const LANGUAGE_SUGGESTIONS = [
@@ -10,6 +11,12 @@ const LANGUAGE_SUGGESTIONS = [
   { label: "English", message: "English" },
   { label: "தமிழ்", message: "தமிழ்" },
 ];
+
+const ACTION_LABELS = {
+  en: { back: "Back", cancel: "Cancel" },
+  si: { back: "ආපසු", cancel: "අවලංගු කරන්න" },
+  ta: { back: "பின்செல்", cancel: "ரத்து செய்" },
+};
 
 const COPY = {
   en: {
@@ -21,6 +28,7 @@ const COPY = {
     askVariant: "Choose an option:",
     askQuantity: "How many would you like to order?",
     invalidQuantity: "Please enter a quantity between 1 and 100.",
+    chooseOrderAction: "Would you like to go back or cancel this order?",
     askName: "What name should we use for this order?",
     askPhone: "What phone number should the seller use for this order?",
     askAddress: "What is the delivery address?",
@@ -40,6 +48,7 @@ const COPY = {
     askVariant: "විකල්පයක් තෝරන්න:",
     askQuantity: "ඔබට අවශ්‍ය ප්‍රමාණය කොපමණද?",
     invalidQuantity: "කරුණාකර 1 සිට 100 දක්වා ප්‍රමාණයක් ඇතුළත් කරන්න.",
+    chooseOrderAction: "ඔබට ආපසු යාමට හෝ මෙම ඇණවුම අවලංගු කිරීමට අවශ්‍යද?",
     askName: "මෙම ඇණවුම සඳහා භාවිත කළ යුතු නම කුමක්ද?",
     askPhone: "මෙම ඇණවුම සඳහා සම්බන්ධ කරගත හැකි දුරකථන අංකය කුමක්ද?",
     askAddress: "භාණ්ඩය භාරදිය යුතු ලිපිනය කුමක්ද?",
@@ -59,6 +68,7 @@ const COPY = {
     askVariant: "ஒரு விருப்பத்தைத் தேர்ந்தெடுக்கவும்:",
     askQuantity: "எத்தனை ஆர்டர் செய்ய விரும்புகிறீர்கள்?",
     invalidQuantity: "1 முதல் 100 வரை ஒரு அளவை உள்ளிடவும்.",
+    chooseOrderAction: "நீங்கள் பின்செல்ல விரும்புகிறீர்களா அல்லது இந்த ஆர்டரை ரத்து செய்ய விரும்புகிறீர்களா?",
     askName: "இந்த ஆர்டருக்கு எந்த பெயரைப் பயன்படுத்த வேண்டும்?",
     askPhone: "இந்த ஆர்டருக்கான தொடர்பு தொலைபேசி எண் என்ன?",
     askAddress: "டெலிவரி முகவரி என்ன?",
@@ -103,7 +113,74 @@ function isOrderIntent(text) {
 }
 
 function isCancel(text) {
-  return /^(cancel|stop|quit|අවලංගු|නවත්වන්න|ரத்து|நிறுத்து)$/iu.test(normalize(text));
+  const value = normalize(text);
+  return /^(?:please\s+)?(?:cancel|stop|quit)(?:\s+(?:my|the|this))?(?:\s+order)?(?:\s+please)?$/iu.test(value)
+    || /^(?:never\s*mind|i\s+(?:do\s*not|don't)\s+want\s+(?:it|this|the\s+order))$/iu.test(value)
+    || /^(?:අවලංගු(?:\s+කරන්න)?|නවත්වන්න|ඇණවුම\s+අවලංගු(?:\s+කරන්න)?)$/u.test(value)
+    || /^(?:ரத்து(?:\s+செய்|\s+செய்யவும்)?|நிறுத்து|ஆர்டரை\s+ரத்து(?:\s+செய்)?)$/u.test(value);
+}
+
+function isBack(text) {
+  return /^(?:back|go\s+back|previous|ආපසු|பின்செல்)$/iu.test(normalize(text));
+}
+
+function isLanguageRequest(text) {
+  const value = normalize(text);
+  const languageWord = "(?:language|lanaguage|langauge)";
+  return new RegExp(`^(?:change|select|switch|choose)?\\s*(?:the\\s+)?${languageWord}(?:\\s+please)?$`, "iu").test(value)
+    || new RegExp(`^(?:can|could|may)\\s+i\\s+(?:change|switch|select)\\s+(?:the\\s+)?${languageWord}\\??$`, "iu").test(value)
+    || /^(?:භාෂාව|භාෂාව\s+වෙනස්(?:\s+කරන්න)?|மொழி|மொழியை\s+மாற்று)$/u.test(value);
+}
+
+function isHelp(text) {
+  return /^(?:help|help\s+me|what\s+should\s+i\s+do|උදව්|உதவி)$/iu.test(normalize(text));
+}
+
+function isNegative(text) {
+  return /^(?:no|nope|nah|නැහැ|එපා|இல்லை|வேண்டாம்)$/iu.test(normalize(text));
+}
+
+function normalizeIdentifier(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function isValidQuantity(text) {
+  if (!/^\d{1,3}$/.test(String(text || "").trim())) return false;
+  const quantity = Number(text);
+  return Number.isInteger(quantity) && quantity >= 1 && quantity <= 100;
+}
+
+function isPlausibleName(text) {
+  const value = String(text || "").trim();
+  return value.length >= 2
+    && value.length <= 120
+    && /\p{L}/u.test(value)
+    && !/[?]/.test(value)
+    && !isCancel(value)
+    && !isBack(value)
+    && !isLanguageRequest(value);
+}
+
+function isPlausiblePhone(text) {
+  const value = String(text || "").trim();
+  if (!/^\+?[\d\s()-]+$/.test(value)) return false;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return !["0123456789", "123456789", "987654321", "9876543210"].includes(digits);
+}
+
+function isPlausibleAddress(text) {
+  const value = String(text || "").trim();
+  return value.length >= 5
+    && value.length <= 500
+    && /\p{L}/u.test(value)
+    && !isCancel(value)
+    && !isBack(value)
+    && !isLanguageRequest(value);
 }
 
 function isConfirm(text) {
@@ -117,6 +194,112 @@ function isChange(text) {
 function choiceIndex(text, length) {
   const number = Number.parseInt(String(text).trim(), 10);
   return Number.isInteger(number) && number >= 1 && number <= length ? number - 1 : -1;
+}
+
+function actionSuggestions(language, { back = true, cancel = true } = {}) {
+  const labels = ACTION_LABELS[language] || ACTION_LABELS.en;
+  return [
+    ...(back ? [{ label: labels.back, message: "Back" }] : []),
+    ...(cancel ? [{ label: labels.cancel, message: "Cancel" }] : []),
+  ];
+}
+
+function resolveCatalogProduct(catalog, text) {
+  const products = Array.isArray(catalog?.products) ? catalog.products : [];
+  const modelIds = Array.isArray(catalog?.modelIds) ? catalog.modelIds : [];
+  const index = choiceIndex(text, products.length);
+  if (index >= 0) {
+    return { name: products[index].name, sku: "" };
+  }
+
+  const normalizedMessage = normalizeIdentifier(text);
+  if (!normalizedMessage) return null;
+  const matchingProducts = products.filter((product) => {
+    const identifiers = [product.key, product.name, ...(product.model_ids || [])]
+      .map(normalizeIdentifier)
+      .filter((value) => value.length >= 4);
+    return identifiers.some((identifier) => (
+      normalizedMessage === identifier
+      || normalizedMessage.includes(identifier)
+    ));
+  });
+  if (matchingProducts.length === 1) {
+    const matchedModel = (matchingProducts[0].model_ids || []).find(
+      (modelId) => normalizeIdentifier(modelId) === normalizedMessage
+        || normalizedMessage.includes(normalizeIdentifier(modelId))
+    );
+    return { name: matchingProducts[0].name, sku: matchedModel || "" };
+  }
+  if (matchingProducts.length > 1) return null;
+
+  const matchedModel = modelIds.find((modelId) => (
+    normalizeIdentifier(modelId) === normalizedMessage
+    || normalizedMessage.includes(normalizeIdentifier(modelId))
+  ));
+  return matchedModel ? { name: String(text).trim(), sku: matchedModel } : null;
+}
+
+async function loadPdfCatalog(companyId) {
+  try {
+    return await ragClient.listPdfProducts(companyId);
+  } catch (error) {
+    console.error("Unable to load PDF product catalog:", error.message);
+    return { products: [], modelIds: [] };
+  }
+}
+
+function stageResponse(state, copy, language, catalog, settings) {
+  const productSuggestions = (catalog?.products || []).slice(0, 12).map((product) => ({
+    label: product.name,
+    message: product.name,
+  }));
+  if (state.stage === "awaiting_product") {
+    return {
+      answer: copy.askProduct,
+      suggestions: [...productSuggestions, ...actionSuggestions(language, { back: false })],
+    };
+  }
+  if (state.stage === "awaiting_quantity") {
+    return { answer: copy.askQuantity, suggestions: actionSuggestions(language) };
+  }
+  if (state.stage === "awaiting_name") {
+    return { answer: copy.askName, suggestions: actionSuggestions(language) };
+  }
+  if (state.stage === "awaiting_phone") {
+    return { answer: copy.askPhone, suggestions: actionSuggestions(language) };
+  }
+  if (state.stage === "awaiting_address") {
+    return { answer: copy.askAddress, suggestions: actionSuggestions(language) };
+  }
+  if (state.stage === "awaiting_payment") {
+    const methods = state.draft?.paymentMethods || settings.paymentMethods || ["Cash on delivery"];
+    return {
+      answer: copy.askPayment,
+      suggestions: [
+        ...methods.map((method) => ({ label: method, message: method })),
+        ...actionSuggestions(language),
+      ],
+    };
+  }
+  if (state.stage === "awaiting_confirmation") {
+    const summary = orderSummary(state.draft || {}, language, settings);
+    return {
+      answer: copy.confirm.replace("{summary}", summary),
+      suggestions: ["Confirm", "Change", "Cancel"].map((item) => ({ label: item, message: item })),
+    };
+  }
+  return { answer: copy.welcome, suggestions: [] };
+}
+
+function previousOrderStage(stage) {
+  return {
+    awaiting_quantity: "awaiting_product",
+    awaiting_name: "awaiting_quantity",
+    awaiting_phone: "awaiting_name",
+    awaiting_address: "awaiting_phone",
+    awaiting_payment: "awaiting_address",
+    awaiting_confirmation: "awaiting_payment",
+  }[stage] || "awaiting_product";
 }
 
 function resetDraft(conversation, stage = "browsing") {
@@ -157,6 +340,7 @@ function hasCompleteDraft(draft) {
     && Number.isInteger(Number(draft.quantity))
     && Number(draft.quantity) > 0
     && draft.customerName
+    && draft.customerPhone
     && draft.deliveryAddress
     && draft.paymentMethod
   );
@@ -196,6 +380,7 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
   const conversation = await getConversation({ companyId, sessionId, channel, customer });
   const message = String(text || "").trim();
   conversation.messages.push({ role: "user", content: message });
+  const currentState = conversation.commerceState || { stage: "browsing", draft: {} };
 
   if (!conversation.preferredLanguage) {
     const requestedLanguage = detectLanguage(message);
@@ -203,25 +388,104 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
       return addReply(conversation, COPY.en.chooseLanguage, { suggestions: LANGUAGE_SUGGESTIONS });
     }
     conversation.preferredLanguage = requestedLanguage;
+    if (currentState.stage === "awaiting_language") {
+      currentState.stage = currentState.draft?._resumeStage || "browsing";
+      if (currentState.draft) delete currentState.draft._resumeStage;
+      conversation.commerceState = currentState;
+      const catalog = currentState.stage === "awaiting_product"
+        ? await loadPdfCatalog(companyId)
+        : { products: [], modelIds: [] };
+      const response = stageResponse(
+        currentState,
+        COPY[requestedLanguage],
+        requestedLanguage,
+        catalog,
+        company.commerceSettings || {}
+      );
+      return addReply(conversation, response.answer, {
+        language: requestedLanguage,
+        suggestions: response.suggestions,
+      });
+    }
     resetDraft(conversation);
     return addReply(conversation, COPY[requestedLanguage].welcome, { language: requestedLanguage });
   }
 
-  const language = conversation.preferredLanguage;
-  const copy = COPY[language] || COPY.en;
+  let language = conversation.preferredLanguage;
+  let copy = COPY[language] || COPY.en;
   const state = conversation.commerceState || { stage: "browsing", draft: {} };
-  const requestedLanguage = state.stage === "browsing" ? detectExplicitLanguage(message) : "";
-  if (requestedLanguage && requestedLanguage !== language) {
-    conversation.preferredLanguage = requestedLanguage;
-    return addReply(conversation, COPY[requestedLanguage].welcome, { language: requestedLanguage });
+  const requestedLanguage = detectExplicitLanguage(message);
+  if (requestedLanguage) {
+    if (requestedLanguage !== language) {
+      conversation.preferredLanguage = requestedLanguage;
+      language = requestedLanguage;
+      copy = COPY[language];
+    }
+    const catalog = state.stage === "awaiting_product"
+      ? await loadPdfCatalog(companyId)
+      : { products: [], modelIds: [] };
+    const response = stageResponse(state, copy, language, catalog, company.commerceSettings || {});
+    return addReply(conversation, response.answer, {
+      language,
+      suggestions: response.suggestions,
+    });
   }
 
   const draft = state.draft || {};
   const settings = company.commerceSettings || {};
 
+  if (isLanguageRequest(message)) {
+    draft._resumeStage = state.stage;
+    state.stage = "awaiting_language";
+    state.draft = draft;
+    conversation.commerceState = state;
+    conversation.preferredLanguage = "";
+    return addReply(conversation, copy.chooseLanguage, {
+      suggestions: LANGUAGE_SUGGESTIONS,
+    });
+  }
+
+  if (state.stage !== "browsing" && isHelp(message)) {
+    const catalog = state.stage === "awaiting_product"
+      ? await loadPdfCatalog(companyId)
+      : { products: [], modelIds: [] };
+    const response = stageResponse(state, copy, language, catalog, settings);
+    return addReply(conversation, response.answer, { suggestions: response.suggestions });
+  }
+
+  if (state.stage !== "browsing" && isNegative(message)) {
+    return addReply(conversation, copy.chooseOrderAction, {
+      suggestions: actionSuggestions(language),
+    });
+  }
+
   if (state.stage !== "browsing" && isCancel(message)) {
     resetDraft(conversation);
     return addReply(conversation, copy.cancelled);
+  }
+
+  if (state.stage !== "browsing" && isBack(message)) {
+    state.stage = previousOrderStage(state.stage);
+    state.draft = draft;
+    conversation.commerceState = state;
+    const catalog = state.stage === "awaiting_product"
+      ? await loadPdfCatalog(companyId)
+      : { products: [], modelIds: [] };
+    const response = stageResponse(state, copy, language, catalog, settings);
+    return addReply(conversation, response.answer, { suggestions: response.suggestions });
+  }
+
+  if (state.stage !== "browsing" && state.stage !== "awaiting_confirmation" && isChange(message)) {
+    resetDraft(conversation, "awaiting_product");
+    const catalog = await loadPdfCatalog(companyId);
+    const response = stageResponse(
+      conversation.commerceState,
+      copy,
+      language,
+      catalog,
+      settings
+    );
+    return addReply(conversation, response.answer, { suggestions: response.suggestions });
   }
 
   if (state.stage === "browsing") {
@@ -229,32 +493,46 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
       await conversation.save();
       return { handled: false, conversation, language };
     }
-    const knownProducts = [...new Set(conversation.ragContext?.productNames || [])].slice(0, 3);
+    const catalog = await loadPdfCatalog(companyId);
+    if (!catalog.products.length && !catalog.modelIds.length) {
+      return addReply(conversation, copy.noProducts);
+    }
     state.stage = "awaiting_product";
     state.draft = {};
     conversation.commerceState = state;
-    return addReply(conversation, copy.askProduct, {
-      suggestions: knownProducts.map((name) => ({ label: name, message: name })),
-    });
+    const response = stageResponse(state, copy, language, catalog, settings);
+    return addReply(conversation, response.answer, { suggestions: response.suggestions });
   }
 
   if (state.stage === "awaiting_product") {
-    if (message.length < 2) return addReply(conversation, copy.noProductMatch);
+    const catalog = await loadPdfCatalog(companyId);
+    const product = resolveCatalogProduct(catalog, message);
+    if (!product) {
+      const response = stageResponse(state, copy, language, catalog, settings);
+      return addReply(conversation, copy.noProductMatch, {
+        suggestions: response.suggestions,
+      });
+    }
     Object.assign(draft, {
-      productName: message.slice(0, 200),
+      productName: product.name.slice(0, 200),
+      sku: product.sku || "",
       unitPrice: 0,
       currency: settings.currency || "LKR",
     });
     state.stage = "awaiting_quantity";
     state.draft = draft;
-    return addReply(conversation, copy.askQuantity);
+    return addReply(conversation, copy.askQuantity, {
+      suggestions: actionSuggestions(language),
+    });
   }
 
   if (state.stage === "awaiting_quantity") {
-    const quantity = Number.parseInt(message, 10);
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
-      return addReply(conversation, copy.invalidQuantity);
+    if (!isValidQuantity(message)) {
+      return addReply(conversation, copy.invalidQuantity, {
+        suggestions: actionSuggestions(language),
+      });
     }
+    const quantity = Number(message);
     draft.quantity = quantity;
     if (conversation.customerName) {
       draft.customerName = conversation.customerName;
@@ -262,43 +540,61 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
         draft.customerPhone = conversation.customerPhone;
         state.stage = "awaiting_address";
         state.draft = draft;
-        return addReply(conversation, copy.askAddress);
+        return addReply(conversation, copy.askAddress, {
+          suggestions: actionSuggestions(language),
+        });
       }
       state.stage = "awaiting_phone";
       state.draft = draft;
-      return addReply(conversation, copy.askPhone);
+      return addReply(conversation, copy.askPhone, {
+        suggestions: actionSuggestions(language),
+      });
     }
     state.stage = "awaiting_name";
     state.draft = draft;
-    return addReply(conversation, copy.askName);
+    return addReply(conversation, copy.askName, {
+      suggestions: actionSuggestions(language),
+    });
   }
 
   if (state.stage === "awaiting_name") {
-    if (message.length < 2) return addReply(conversation, copy.askName);
+    if (!isPlausibleName(message)) return addReply(conversation, copy.askName, {
+      suggestions: actionSuggestions(language),
+    });
     draft.customerName = message.slice(0, 120);
     conversation.customerName = draft.customerName;
     if (conversation.customerPhone) {
       draft.customerPhone = conversation.customerPhone;
       state.stage = "awaiting_address";
       state.draft = draft;
-      return addReply(conversation, copy.askAddress);
+      return addReply(conversation, copy.askAddress, {
+        suggestions: actionSuggestions(language),
+      });
     }
     state.stage = "awaiting_phone";
     state.draft = draft;
-    return addReply(conversation, copy.askPhone);
+    return addReply(conversation, copy.askPhone, {
+      suggestions: actionSuggestions(language),
+    });
   }
 
   if (state.stage === "awaiting_phone") {
-    if (!/^[+\d][\d\s()-]{6,24}$/.test(message)) return addReply(conversation, copy.askPhone);
+    if (!isPlausiblePhone(message)) return addReply(conversation, copy.askPhone, {
+      suggestions: actionSuggestions(language),
+    });
     draft.customerPhone = message;
     conversation.customerPhone = message;
     state.stage = "awaiting_address";
     state.draft = draft;
-    return addReply(conversation, copy.askAddress);
+    return addReply(conversation, copy.askAddress, {
+      suggestions: actionSuggestions(language),
+    });
   }
 
   if (state.stage === "awaiting_address") {
-    if (message.length < 5) return addReply(conversation, copy.askAddress);
+    if (!isPlausibleAddress(message)) return addReply(conversation, copy.askAddress, {
+      suggestions: actionSuggestions(language),
+    });
     draft.deliveryAddress = message.slice(0, 500);
     const methods = settings.paymentMethods?.length
       ? settings.paymentMethods
@@ -307,7 +603,10 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     state.stage = "awaiting_payment";
     state.draft = draft;
     return addReply(conversation, copy.askPayment, {
-      suggestions: methods.map((method) => ({ label: method, message: method })),
+      suggestions: [
+        ...methods.map((method) => ({ label: method, message: method })),
+        ...actionSuggestions(language),
+      ],
     });
   }
 
@@ -316,7 +615,10 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     const index = choiceIndex(message, methods.length);
     const method = index >= 0 ? methods[index] : methods.find((item) => normalize(item) === normalize(message));
     if (!method) return addReply(conversation, copy.askPayment, {
-      suggestions: methods.map((item) => ({ label: item, message: item })),
+      suggestions: [
+        ...methods.map((item) => ({ label: item, message: item })),
+        ...actionSuggestions(language),
+      ],
     });
     draft.paymentMethod = method;
     delete draft.paymentMethods;
@@ -394,6 +696,15 @@ module.exports = {
   LANGUAGE_NAMES,
   detectLanguage,
   detectExplicitLanguage,
+  isBack,
+  isCancel,
+  isLanguageRequest,
+  isNegative,
+  isPlausibleAddress,
+  isPlausibleName,
+  isPlausiblePhone,
+  isValidQuantity,
   localizedText,
+  resolveCatalogProduct,
   processCommerceMessage,
 };

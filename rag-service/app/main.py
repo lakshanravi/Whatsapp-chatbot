@@ -24,6 +24,7 @@ from app.models.schemas import (
     IngestResponse,
     QueryRequest,
     QueryResponse,
+    ProductCatalogResponse,
     UpdateDocumentActiveRequest,
 )
 from app.services.rag_engine import RAGEngine
@@ -290,3 +291,12 @@ def query_knowledge(request: QueryRequest):
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@app.get("/catalog/products", response_model=ProductCatalogResponse)
+def list_catalog_products(company_id: str):
+    try:
+        with engine_lock:
+            return engine.store.product_catalog(company_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Product catalog failed: {str(e)}")

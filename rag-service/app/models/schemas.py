@@ -59,6 +59,17 @@ class QueryResponse(BaseModel):
     diagnostics: QueryDiagnostics | None = None
 
 
+class ProductCatalogItem(BaseModel):
+    key: str
+    name: str
+    model_ids: list[str] = Field(default_factory=list)
+
+
+class ProductCatalogResponse(BaseModel):
+    products: list[ProductCatalogItem] = Field(default_factory=list)
+    model_ids: list[str] = Field(default_factory=list)
+
+
 class IngestResponse(BaseModel):
     success: bool
     chunks_indexed: int

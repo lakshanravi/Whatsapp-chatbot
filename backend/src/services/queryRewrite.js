@@ -4,19 +4,20 @@ const config = require("../config");
 const REWRITE_TIMEOUT_MS = 15000;
 const isDev = process.env.NODE_ENV !== "production";
 
-const SMALL_TALK_INTENTS = new Set(["greeting", "introduction", "thanks", "goodbye"]);
+const SMALL_TALK_INTENTS = new Set(["greeting", "introduction", "thanks", "goodbye", "unclear"]);
 
 const SYSTEM_PROMPT = `You classify and preprocess customer messages for a support chatbot.
 
 Return JSON only with this exact shape:
 {
-  "intent": "greeting" | "introduction" | "thanks" | "goodbye" | "support_question",
+  "intent": "greeting" | "introduction" | "thanks" | "goodbye" | "unclear" | "support_question",
   "reply": "short friendly reply for greeting/introduction/thanks/goodbye, otherwise null",
   "correctedQuestion": "spelling-corrected question for support_question, otherwise null"
 }
 
 Rules:
 - Use greeting, introduction, thanks, or goodbye ONLY when the message is purely social with no support question.
+- Use unclear when the message is nonsensical, severely mistranscribed, or too incomplete to identify any request. Ask the customer to repeat it; never invent a greeting, product, or order intent.
 - An introduction includes a customer's name, such as "Hi, I am Maya". Greet them by name.
 - If the message mixes small talk with a real question (e.g. "hi how do I reset password"), use support_question.
 - For support_question, fix spelling and grammar in correctedQuestion while keeping the meaning.
@@ -79,7 +80,7 @@ function parseAnalyzeResponse(content, original) {
   }
 }
 
-async function analyzeUserMessage(message) {
+async function analyzeUserMessage(message, { responseLanguage = "" } = {}) {
   const original = String(message || "").trim();
   if (!original) {
     return { intent: "support_question", reply: null, correctedQuestion: original };
@@ -98,7 +99,10 @@ async function analyzeUserMessage(message) {
         temperature: 0,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: `${SYSTEM_PROMPT}\n\n${SOCIAL_STYLE_PROMPT}` },
+          {
+            role: "system",
+            content: `${SYSTEM_PROMPT}\n\n${SOCIAL_STYLE_PROMPT}\n\nPreferred reply language code: ${responseLanguage || "match the customer"}.`,
+          },
           { role: "user", content: original },
         ],
       },

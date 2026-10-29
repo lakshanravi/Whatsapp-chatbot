@@ -358,6 +358,12 @@ export const api = {
     },
     history: (companyId, sessionId) =>
       request(`/api/companies/${companyId}/chat/history/${sessionId}`),
+    createRealtimeSession: (companyId, sessionId) =>
+      request(`/api/companies/${companyId}/chat/realtime/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      }),
   },
 };
 

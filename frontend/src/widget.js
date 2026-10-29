@@ -1,3 +1,5 @@
+import { createRealtimeVoice } from "./lib/realtimeVoice";
+
 const DEFAULTS = {
   apiBaseUrl: "https://botbackend.pentarixlabs.com",
   companyId: "",
@@ -102,6 +104,8 @@ function createStyle(config) {
     .ragw-input{flex:1;min-width:0;height:40px;border:1px solid #cbd5e1;border-radius:7px;padding:0 10px;font-size:14px;outline:none}
     .ragw-send{height:40px;border:0;border-radius:7px;background:${sendButtonColor};color:#fff;padding:0 14px;font-weight:700;cursor:pointer}
     .ragw-send:disabled{opacity:.55;cursor:not-allowed}
+    .ragw-voice-button{display:grid;flex:0 0 40px;width:40px;height:40px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#475569;cursor:pointer;place-items:center}.ragw-voice-button:hover{border-color:${sendButtonColor};color:${sendButtonColor}}.ragw-voice-button.ragw-muted{border-color:#fecdd3;color:#be123c}.ragw-voice-button:disabled{opacity:.45;cursor:not-allowed}.ragw-voice-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .ragw-voice-status{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid #d1fae5;background:#ecfdf5;color:#065f46;font-size:12px}.ragw-voice-status[hidden],.ragw-voice-button[hidden]{display:none!important}.ragw-voice-dot{width:7px;height:7px;border-radius:50%;background:#10b981}.ragw-voice-dot.ragw-live{animation:ragw-pulse 1.2s infinite}.ragw-voice-copy{min-width:0;flex:1}.ragw-voice-label{font-weight:700}.ragw-voice-transcript{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.86}.ragw-voice-end{border:0;background:transparent;color:#065f46;font:inherit;font-weight:700;cursor:pointer}
   `;
   document.head.appendChild(style);
 }
@@ -256,6 +260,30 @@ async function loadHistory(config, sessionId) {
   return data;
 }
 
+async function createVoiceSession(config, sessionId) {
+  let response;
+  try {
+    response = await fetch(
+      `${config.apiBaseUrl}/widget/companies/${config.companyId}/chat/realtime/session`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Widget-API-Key": config.apiKey,
+        },
+        body: JSON.stringify({ sessionId }),
+      }
+    );
+  } catch (cause) {
+    throw new Error(friendlyChatError(0, null, cause));
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "Voice is temporarily unavailable. Please try again.");
+  }
+  return data;
+}
+
 function initWidget(options = {}) {
   const config = { ...DEFAULTS, ...window.RAG_CHAT_WIDGET, ...options };
   if (!config.companyId) {
@@ -280,8 +308,25 @@ function initWidget(options = {}) {
         </div>
       </header>
       <div class="ragw-messages"></div>
+      <div class="ragw-voice-status" hidden>
+        <span class="ragw-voice-dot"></span>
+        <div class="ragw-voice-copy">
+          <div class="ragw-voice-label">Listening</div>
+          <div class="ragw-voice-transcript"></div>
+        </div>
+        <button class="ragw-voice-end" type="button">End</button>
+      </div>
       <form class="ragw-form">
         <input class="ragw-input" type="text" placeholder="Type your question" autocomplete="off" />
+        <button class="ragw-voice-button ragw-voice-start" type="button" aria-label="Start voice conversation" title="Start voice conversation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>
+        </button>
+        <button class="ragw-voice-button ragw-voice-mute" type="button" aria-label="Mute microphone" title="Mute microphone" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>
+        </button>
+        <button class="ragw-voice-button ragw-voice-stop" type="button" aria-label="Stop assistant speaking" title="Stop speaking" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>
+        </button>
         <button class="ragw-send" type="submit">Send</button>
       </form>
     </section>
@@ -297,12 +342,117 @@ function initWidget(options = {}) {
   const toggle = root.querySelector(".ragw-button");
   const newChat = root.querySelector(".ragw-new-chat");
   const close = root.querySelector(".ragw-close");
+  const voiceStatus = root.querySelector(".ragw-voice-status");
+  const voiceDot = root.querySelector(".ragw-voice-dot");
+  const voiceLabel = root.querySelector(".ragw-voice-label");
+  const voiceTranscript = root.querySelector(".ragw-voice-transcript");
+  const voiceStart = root.querySelector(".ragw-voice-start");
+  const voiceMute = root.querySelector(".ragw-voice-mute");
+  const voiceStop = root.querySelector(".ragw-voice-stop");
+  const voiceEnd = root.querySelector(".ragw-voice-end");
   let historyReady = false;
+  let voiceController = null;
+  let voiceState = "idle";
+  let voiceMuted = false;
+  let voiceQueue = Promise.resolve();
+  let voiceAttempt = 0;
+  let voiceLanguage = "";
   input.disabled = true;
   send.disabled = true;
 
+  function updateVoiceUi(state) {
+    voiceState = state;
+    const active = state !== "idle" && state !== "disconnected";
+    const labels = {
+      connecting: "Connecting voice…",
+      listening: "Listening",
+      thinking: "Finding an answer…",
+      speaking: "Speaking",
+      muted: "Microphone muted",
+      disconnected: "Voice disconnected",
+    };
+    voiceStatus.hidden = !active;
+    voiceStart.hidden = active;
+    voiceMute.hidden = !active;
+    voiceStop.hidden = state !== "speaking";
+    voiceDot.classList.toggle("ragw-live", state === "listening");
+    voiceLabel.textContent = labels[state] || "Voice active";
+  }
+
+  function stopVoice() {
+    voiceAttempt += 1;
+    voiceController?.close();
+    voiceController = null;
+    voiceQueue = Promise.resolve();
+    voiceMuted = false;
+    voiceTranscript.textContent = "";
+    voiceMute.setAttribute("aria-label", "Mute microphone");
+    voiceMute.title = "Mute microphone";
+    voiceMute.classList.remove("ragw-muted");
+    updateVoiceUi("idle");
+  }
+
+  async function startVoice() {
+    if (voiceController || voiceState === "connecting" || !historyReady) return;
+    voiceTranscript.textContent = "";
+    const attempt = ++voiceAttempt;
+    try {
+      const controller = await createRealtimeVoice({
+        getSessionToken: () => createVoiceSession(config, sessionId),
+        onStateChange: updateVoiceUi,
+        onInputTranscriptDelta: (delta) => {
+          voiceTranscript.textContent += delta;
+        },
+        onInputTranscript: (transcript) => {
+          voiceTranscript.textContent = transcript;
+          updateVoiceUi("thinking");
+          voiceQueue = voiceQueue.then(async () => {
+            const result = await submitMessage(transcript, transcript);
+            if (!result?.answer && voiceController) {
+              updateVoiceUi(voiceMuted ? "muted" : "listening");
+            }
+          });
+        },
+        onOutputTranscriptDelta: (delta) => {
+          voiceTranscript.textContent += delta;
+        },
+        onUnclearTranscript: () => {
+          const warning = {
+            si: "මට එය පැහැදිලිව හඳුනාගත නොහැකි විය. කරුණාකර නැවත කියන්න.",
+            ta: "அதைத் தெளிவாகப் புரிந்துகொள்ள முடியவில்லை. மீண்டும் சொல்லுங்கள்.",
+            en: "I couldn't recognize that clearly. Please say it again.",
+          }[voiceLanguage] || "I couldn't recognize that language clearly. Please choose English, Sinhala, or Tamil and try again.";
+          voiceTranscript.textContent = warning;
+          messages.appendChild(messageNode("bot", warning));
+          messages.scrollTop = messages.scrollHeight;
+          updateVoiceUi("listening");
+          voiceController?.speak(warning);
+        },
+        onError: (error) => {
+          console.warn("[RAG Widget] Realtime voice error", error);
+          voiceTranscript.textContent = error.message || "Voice encountered an error.";
+        },
+      });
+      if (attempt !== voiceAttempt) {
+        controller.close();
+        return;
+      }
+      voiceController = controller;
+      if (voiceLanguage) controller.setInputLanguage(voiceLanguage);
+      voiceMuted = false;
+    } catch (error) {
+      if (attempt !== voiceAttempt) return;
+      stopVoice();
+      messages.appendChild(messageNode(
+        "bot",
+        error.message || "Voice is temporarily unavailable. Please type your message instead."
+      ));
+      messages.scrollTop = messages.scrollHeight;
+    }
+  }
+
   async function submitMessage(text, displayText = text, { isSuggestion = false } = {}) {
-    if (!text || !historyReady) return;
+    if (!text || !historyReady) return null;
     input.value = "";
     messages.appendChild(messageNode("user", displayText));
     messages.scrollTop = messages.scrollHeight;
@@ -329,24 +479,51 @@ function initWidget(options = {}) {
         result.suggestions || [],
         result.media || []
       ));
+      if (result.language) voiceLanguage = result.language;
+      if (voiceController && result.answer) {
+        if (result.language) voiceController.setInputLanguage(result.language);
+        voiceTranscript.textContent = "";
+        voiceController.speak(result.answer);
+      }
+      return result;
     } catch (error) {
       if (sessionId !== requestSessionId) return;
       typing.remove();
       messages.appendChild(messageNode("bot", error.message || "Unable to send message."));
+      return null;
     } finally {
       send.disabled = false;
       messages.scrollTop = messages.scrollHeight;
     }
   }
 
-  toggle.addEventListener("click", () => root.classList.toggle("ragw-open"));
+  toggle.addEventListener("click", () => {
+    const willOpen = !root.classList.contains("ragw-open");
+    root.classList.toggle("ragw-open");
+    if (!willOpen) stopVoice();
+  });
   newChat.addEventListener("click", () => {
+    stopVoice();
     sessionId = createSessionId(config.companyId);
+    voiceLanguage = "";
     messages.replaceChildren(messageNode("bot", config.greeting || "Hi, how can I help?"));
     input.value = "";
     input.focus();
   });
-  close.addEventListener("click", () => root.classList.remove("ragw-open"));
+  close.addEventListener("click", () => {
+    stopVoice();
+    root.classList.remove("ragw-open");
+  });
+  voiceStart.addEventListener("click", startVoice);
+  voiceMute.addEventListener("click", () => {
+    if (!voiceController) return;
+    voiceMuted = voiceController.setMuted(!voiceController.isMuted());
+    voiceMute.classList.toggle("ragw-muted", voiceMuted);
+    voiceMute.setAttribute("aria-label", voiceMuted ? "Unmute microphone" : "Mute microphone");
+    voiceMute.title = voiceMuted ? "Unmute microphone" : "Mute microphone";
+  });
+  voiceStop.addEventListener("click", () => voiceController?.stopSpeaking());
+  voiceEnd.addEventListener("click", stopVoice);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     await submitMessage(input.value.trim());
@@ -361,6 +538,7 @@ function initWidget(options = {}) {
       const history = await loadHistory(config, sessionId);
       loading.remove();
       const savedMessages = Array.isArray(history.messages) ? history.messages : [];
+      voiceLanguage = history.preferredLanguage || "";
       if (!savedMessages.length) {
         messages.appendChild(messageNode("bot", config.greeting || "Hi, how can I help?"));
         return;

@@ -21,7 +21,7 @@ async function processCustomerMessage({ companyId, sessionId, channel, text, cus
   }
 
   const { conversation, language } = commerce;
-  const preprocessed = await preprocessUserMessage(text);
+  const preprocessed = await preprocessUserMessage(text, { responseLanguage: language });
   if (preprocessed.type === "small_talk") {
     conversation.messages.push({ role: "assistant", content: preprocessed.reply });
     await conversation.save();

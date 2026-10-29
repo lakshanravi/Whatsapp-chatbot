@@ -1,6 +1,7 @@
 import unittest
 
 from app.services.product_names import (
+    extract_product_labels,
     extract_product_names,
     matches_product_names,
     normalize_product_name,
@@ -13,6 +14,20 @@ class ProductNameTests(unittest.TestCase):
             extract_product_names("Compare SunSaver with SureSine."),
             {"sunsaver", "suresine"},
         )
+
+    def test_customer_facing_product_labels_stop_before_sku(self):
+        labels = extract_product_labels(
+            "AeroBreeze Table Fan - SKU LHS-FAN-16\n"
+            "QuickBoil Glass Kettle - SKU LHS-KTL-17"
+        )
+        self.assertEqual(labels["aerobreeze"], "AeroBreeze Table Fan")
+        self.assertEqual(labels["quickboil"], "QuickBoil Glass Kettle")
+
+    def test_product_labels_do_not_absorb_description_sentences(self):
+        labels = extract_product_labels(
+            "SmartCook Rice Cooker has a 1.8-litre bowl."
+        )
+        self.assertEqual(labels["smartcook"], "SmartCook Rice Cooker")
 
     def test_ordinary_title_case_words_are_not_product_filters(self):
         self.assertEqual(

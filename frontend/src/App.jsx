@@ -7,6 +7,8 @@ import {
   FileText,
   History,
   Loader2,
+  Mic,
+  MicOff,
   MessageSquare,
   MessagesSquare,
   Pencil,
@@ -14,6 +16,7 @@ import {
   RefreshCcw,
   Search,
   Send,
+  Square,
   SlidersHorizontal,
   ShoppingCart,
   Trash2,
@@ -47,6 +50,7 @@ import {
   getCompanyWidgetTheme,
 } from "./constants/forms";
 import { api, formatDate, getAuthToken, setAuthToken } from "./lib/api";
+import { createRealtimeVoice } from "./lib/realtimeVoice";
 import { classNames } from "./utils/classNames";
 
 function InlineFormat({ text }) {
@@ -163,6 +167,14 @@ export default function App() {
   const [chatResult, setChatResult] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const chatMessagesEndRef = useRef(null);
+  const voiceControllerRef = useRef(null);
+  const voiceQueueRef = useRef(Promise.resolve());
+  const voiceAttemptRef = useRef(0);
+  const voiceLanguageRef = useRef("");
+  const [voiceState, setVoiceState] = useState("idle");
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceInputTranscript, setVoiceInputTranscript] = useState("");
+  const [voiceOutputTranscript, setVoiceOutputTranscript] = useState("");
   const [widgetKeyResult, setWidgetKeyResult] = useState(null);
   const [widgetApiKeyInput, setWidgetApiKeyInput] = useState("");
   const [widgetEmbedMode, setWidgetEmbedMode] = useState("all");
@@ -1209,11 +1221,18 @@ ${widgetScriptSrc()}`;
     chatMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [chatMessages, loading.chat]);
 
-  async function sendTestChatMessage(value) {
-    if (!selectedCompany || !String(value || "").trim() || loading.chat) return;
+  useEffect(() => () => {
+    voiceAttemptRef.current += 1;
+    voiceControllerRef.current?.close();
+    voiceControllerRef.current = null;
+  }, [activeSection, selectedId]);
+
+  async function sendTestChatMessage(value, sessionIdOverride = "") {
+    if (!selectedCompany || !String(value || "").trim() || loading.chat) return null;
     const sentMessage = String(value).trim();
     const payload = { message: sentMessage };
-    if (chatSessionId.trim()) payload.sessionId = chatSessionId.trim();
+    const requestSessionId = String(sessionIdOverride || chatSessionId).trim();
+    if (requestSessionId) payload.sessionId = requestSessionId;
     const result = await runTask("chat", () => api.chat.ask(selectedCompany._id, payload));
     if (result) {
       setChatResult(result);
@@ -1237,7 +1256,93 @@ ${widgetScriptSrc()}`;
         ]);
       }
       await loadConversations();
+      if (voiceControllerRef.current && result.answer) {
+        if (result.language) {
+          voiceLanguageRef.current = result.language;
+          voiceControllerRef.current.setInputLanguage(result.language);
+        }
+        setVoiceOutputTranscript("");
+        voiceControllerRef.current.speak(result.answer);
+      }
     }
+    return result;
+  }
+
+  function stopRealtimeVoice() {
+    voiceAttemptRef.current += 1;
+    voiceControllerRef.current?.close();
+    voiceControllerRef.current = null;
+    voiceQueueRef.current = Promise.resolve();
+    setVoiceState("idle");
+    setVoiceMuted(false);
+    setVoiceInputTranscript("");
+    setVoiceOutputTranscript("");
+    voiceLanguageRef.current = "";
+  }
+
+  async function startRealtimeVoice() {
+    if (!selectedCompany || voiceControllerRef.current || voiceState === "connecting") return;
+    setError("");
+    const sessionId = chatSessionId.trim() || `web_guest_${crypto.randomUUID()}`;
+    if (!chatSessionId.trim()) setChatSessionId(sessionId);
+    setVoiceInputTranscript("");
+    setVoiceOutputTranscript("");
+    voiceLanguageRef.current = chatResult?.language || "";
+    const attempt = ++voiceAttemptRef.current;
+
+    try {
+      const controller = await createRealtimeVoice({
+        getSessionToken: () => api.chat.createRealtimeSession(selectedCompany._id, sessionId),
+        onStateChange: setVoiceState,
+        onInputTranscriptDelta: (delta) => {
+          setVoiceInputTranscript((current) => current + delta);
+        },
+        onInputTranscript: (transcript) => {
+          setVoiceInputTranscript(transcript);
+          setVoiceOutputTranscript("");
+          setVoiceState("thinking");
+          voiceQueueRef.current = voiceQueueRef.current.then(async () => {
+            const result = await sendTestChatMessage(transcript, sessionId);
+            if (!result?.answer && voiceControllerRef.current) {
+              setVoiceState(voiceControllerRef.current.isMuted() ? "muted" : "listening");
+            }
+          });
+        },
+        onOutputTranscriptDelta: (delta) => {
+          setVoiceOutputTranscript((current) => current + delta);
+        },
+        onUnclearTranscript: () => {
+          const warning = {
+            si: "මට එය පැහැදිලිව හඳුනාගත නොහැකි විය. කරුණාකර නැවත කියන්න.",
+            ta: "அதைத் தெளிவாகப் புரிந்துகொள்ள முடியவில்லை. மீண்டும் சொல்லுங்கள்.",
+            en: "I couldn't recognize that clearly. Please say it again.",
+          }[voiceLanguageRef.current] || "I couldn't recognize that language clearly. Please choose English, Sinhala, or Tamil and try again.";
+          setVoiceInputTranscript(warning);
+          setChatMessages((current) => [...current, { role: "assistant", content: warning }]);
+          setVoiceState("listening");
+          voiceControllerRef.current?.speak(warning);
+        },
+        onError: (err) => setError(err.message || "The voice session encountered an error"),
+      });
+      if (attempt !== voiceAttemptRef.current) {
+        controller.close();
+        return;
+      }
+      voiceControllerRef.current = controller;
+      if (voiceLanguageRef.current) controller.setInputLanguage(voiceLanguageRef.current);
+      setVoiceMuted(false);
+    } catch (err) {
+      if (attempt !== voiceAttemptRef.current) return;
+      stopRealtimeVoice();
+      setError(err.message || "Unable to start realtime voice");
+    }
+  }
+
+  function toggleRealtimeMute() {
+    const controller = voiceControllerRef.current;
+    if (!controller) return;
+    const nextMuted = controller.setMuted(!controller.isMuted());
+    setVoiceMuted(nextMuted);
   }
 
   async function handleChat(event) {
@@ -1347,6 +1452,7 @@ ${widgetScriptSrc()}`;
   }
 
   function handleNewChatSession() {
+    stopRealtimeVoice();
     setChatSessionId("");
     setChatResult(null);
     setChatMessages([]);
@@ -3083,6 +3189,31 @@ ${widgetScriptSrc()}`;
                   </div>
 
                   <form className="border-t border-slate-200 bg-white p-3 sm:p-4" onSubmit={handleChat}>
+                    {voiceState !== "idle" && (
+                      <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
+                            <span className={classNames("h-2 w-2 rounded-full bg-emerald-500", voiceState === "listening" && "animate-pulse")} />
+                            {{
+                              connecting: "Connecting voice…",
+                              listening: "Listening",
+                              thinking: "Finding an answer…",
+                              speaking: "Speaking",
+                              muted: "Microphone muted",
+                              disconnected: "Voice disconnected",
+                            }[voiceState] || "Voice active"}
+                          </div>
+                          {(voiceOutputTranscript || voiceInputTranscript) && (
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-emerald-800">
+                              {voiceOutputTranscript || voiceInputTranscript}
+                            </p>
+                          )}
+                        </div>
+                        <button type="button" onClick={stopRealtimeVoice} className="shrink-0 text-xs font-semibold text-emerald-800 hover:text-emerald-950">
+                          End voice
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 transition focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10">
                       <textarea
                         value={chatMessage}
@@ -3097,6 +3228,20 @@ ${widgetScriptSrc()}`;
                         rows={1}
                         className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
                       />
+                      {voiceState === "idle" || voiceState === "disconnected" ? (
+                        <button type="button" onClick={startRealtimeVoice} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700" aria-label="Start voice conversation" title="Start voice conversation">
+                          <Mic size={17} />
+                        </button>
+                      ) : (
+                        <>
+                          <button type="button" onClick={toggleRealtimeMute} disabled={voiceState === "connecting"} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-40" aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} title={voiceMuted ? "Unmute" : "Mute"}>
+                            {voiceMuted ? <MicOff size={17} /> : <Mic size={17} />}
+                          </button>
+                          <button type="button" onClick={() => voiceControllerRef.current?.stopSpeaking()} disabled={voiceState !== "speaking"} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-40" aria-label="Stop assistant speaking" title="Stop speaking">
+                            <Square size={15} />
+                          </button>
+                        </>
+                      )}
                       <button type="submit" disabled={loading.chat || !chatMessage.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message">
                         {loading.chat ? <Loader2 className="animate-spin" size={17} /> : <Send size={17} />}
                       </button>

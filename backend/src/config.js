@@ -31,6 +31,10 @@ const config = {
   publicBackendUrl: process.env.PUBLIC_BACKEND_URL || "",
   openaiApiKey: process.env.OPENAI_API_KEY,
   openaiChatModel: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+  openaiRealtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1",
+  openaiRealtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
+  openaiRealtimeTranscriptionModel:
+    process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL || "gpt-live-transcribe",
   googleClientIds: parseCsvEnv(
     process.env.GOOGLE_CLIENT_IDS || process.env.GOOGLE_CLIENT_ID
   ),

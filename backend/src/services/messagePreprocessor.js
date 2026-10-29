@@ -20,7 +20,7 @@ function logPreprocess(original, result) {
   }
 }
 
-async function preprocessUserMessage(message, { skipSmallTalk = false } = {}) {
+async function preprocessUserMessage(message, { skipSmallTalk = false, responseLanguage = "" } = {}) {
   const original = String(message || "").trim();
   if (!original) {
     return { type: "empty" };
@@ -42,7 +42,7 @@ async function preprocessUserMessage(message, { skipSmallTalk = false } = {}) {
     return result;
   }
 
-  const analyzed = await analyzeUserMessage(original);
+  const analyzed = await analyzeUserMessage(original, { responseLanguage });
 
   if (analyzed.intent !== "support_question" && analyzed.reply) {
     const result = { type: "small_talk", reply: analyzed.reply, source: "ai" };

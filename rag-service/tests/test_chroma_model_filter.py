@@ -392,6 +392,51 @@ class ChromaModelFilterTests(unittest.TestCase):
             {result["content"] for result in results},
         )
 
+    def test_order_catalog_excludes_platform_and_document_labels(self):
+        client = chromadb.EphemeralClient()
+        collection = client.create_collection("order_catalog_filter_test")
+        collection.add(
+            ids=["fan", "platform", "specsheet"],
+            embeddings=[[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]],
+            documents=[
+                "AeroBreeze Table Fan - SKU LHS-FAN-16",
+                "Connect using WhatsApp or Facebook Messenger.",
+                "Lumera 220W SpecSheet",
+            ],
+            metadatas=[
+                {
+                    "document_id": "products",
+                    "document_name": "Product Guide.pdf",
+                    "product_names": "aerobreeze",
+                    "model_ids": "LHSFAN16",
+                    "is_active": True,
+                },
+                {
+                    "document_id": "platform",
+                    "document_name": "Integration Guide.pdf",
+                    "product_names": "whatsapp",
+                    "model_ids": "",
+                    "is_active": True,
+                },
+                {
+                    "document_id": "specsheet",
+                    "document_name": "Lumera220WSpecSheet.pdf",
+                    "product_names": "specsheet",
+                    "model_ids": "LUMERA220WSPECSHEET",
+                    "is_active": True,
+                },
+            ],
+        )
+        store = ChromaStore.__new__(ChromaStore)
+        store._get_collection = lambda _company_id: collection
+
+        catalog = store.product_catalog("company")
+
+        self.assertEqual([item["name"] for item in catalog["products"]], [
+            "AeroBreeze Table Fan",
+        ])
+        self.assertEqual(catalog["model_ids"], ["LHSFAN16"])
+
 
 if __name__ == "__main__":
     unittest.main()

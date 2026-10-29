@@ -1,7 +1,20 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { detectExplicitLanguage, detectLanguage, localizedText } = require("../src/services/commerce");
+const {
+  detectExplicitLanguage,
+  detectLanguage,
+  isBack,
+  isCancel,
+  isLanguageRequest,
+  isNegative,
+  isPlausibleAddress,
+  isPlausibleName,
+  isPlausiblePhone,
+  isValidQuantity,
+  localizedText,
+  resolveCatalogProduct,
+} = require("../src/services/commerce");
 const { mapIncomingWebhook } = require("../src/modules/messenger/messenger.mapper");
 const Conversation = require("../src/models/Conversation");
 const Order = require("../src/models/Order");
@@ -21,6 +34,49 @@ test("does not interpret order quantities as language changes", () => {
 test("localized product names fall back to an available translation", () => {
   assert.equal(localizedText({ en: "Tea", si: "තේ" }, "si"), "තේ");
   assert.equal(localizedText({ en: "Tea", si: "" }, "ta"), "Tea");
+});
+
+test("global order commands accept natural phrases", () => {
+  assert.equal(isCancel("cancel order"), true);
+  assert.equal(isCancel("Please cancel my order"), true);
+  assert.equal(isBack("go back"), true);
+  assert.equal(isLanguageRequest("can I change the language?"), true);
+  assert.equal(isNegative("no"), true);
+});
+
+test("order quantities require a complete integer from 1 to 100", () => {
+  assert.equal(isValidQuantity("5"), true);
+  assert.equal(isValidQuantity("5 items"), false);
+  assert.equal(isValidQuantity("0"), false);
+  assert.equal(isValidQuantity("101"), false);
+});
+
+test("order contact details reject commands and obvious placeholders", () => {
+  assert.equal(isPlausibleName("Lakshan"), true);
+  assert.equal(isPlausibleName("cancel order"), false);
+  assert.equal(isPlausiblePhone("+94 77 123 4567"), true);
+  assert.equal(isPlausiblePhone("123456789"), false);
+  assert.equal(isPlausibleAddress("Pallewela, Sri Lanka"), true);
+  assert.equal(isPlausibleAddress("back"), false);
+});
+
+test("PDF catalog resolution rejects arbitrary sentences", () => {
+  const catalog = {
+    products: [
+      { key: "aerobreeze", name: "AeroBreeze Table Fan", model_ids: ["LHSFAN16"] },
+      { key: "quickboil", name: "QuickBoil Glass Kettle", model_ids: ["LHSKTL17"] },
+    ],
+    modelIds: ["LHSFAN16", "LHSKTL17"],
+  };
+  assert.deepEqual(resolveCatalogProduct(catalog, "AeroBreeze Table Fan"), {
+    name: "AeroBreeze Table Fan",
+    sku: "",
+  });
+  assert.equal(resolveCatalogProduct(catalog, "can i change the language"), null);
+  assert.deepEqual(resolveCatalogProduct(catalog, "2"), {
+    name: "QuickBoil Glass Kettle",
+    sku: "",
+  });
 });
 
 test("maps Messenger text and postback events and ignores echoes", () => {

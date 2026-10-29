@@ -19,6 +19,7 @@ from app.services.model_ids import (
 )
 from app.services.product_names import (
     extract_product_names,
+    extract_product_labels,
     item_product_names,
     matches_product_names,
     serialize_product_names,
@@ -42,6 +43,7 @@ class ChromaStore:
         )
         self.fts = FTSStore(fts_path)
         self._fts_counts: dict[str, int] = {}
+        self._catalog_cache: dict[str, dict] = {}
 
     def _ensure_fts(self, company_id: str, collection) -> None:
         if not hasattr(self, "fts"):
@@ -68,6 +70,8 @@ class ChromaStore:
         self._fts_counts[company_id] = count
 
     def _invalidate_fts(self, company_id: str) -> None:
+        if hasattr(self, "_catalog_cache"):
+            self._catalog_cache.pop(company_id, None)
         if not hasattr(self, "fts"):
             return
         if not hasattr(self, "_fts_counts"):
@@ -353,6 +357,75 @@ class ChromaStore:
         ]
         collection.update(ids=existing["ids"], metadatas=metadatas)
         self._invalidate_fts(company_id)
+
+    def product_catalog(self, company_id: str) -> dict:
+        """List orderable product identifiers from active indexed PDF content."""
+        if not hasattr(self, "_catalog_cache"):
+            self._catalog_cache = {}
+        if company_id in self._catalog_cache:
+            return self._catalog_cache[company_id]
+        non_product_keys = {
+            "whatsapp", "whatsap", "facebook", "facebookmessenger", "messenger",
+            "specsheet", "datasheet", "userguide", "quickstart", "productguide",
+        }
+
+        def orderable_model_id(value: str) -> bool:
+            normalized = str(value or "").upper()
+            return not any(term in normalized for term in (
+                "SPECSHEET", "DATASHEET", "USERGUIDE", "QUICKSTART", "PRODUCTGUIDE",
+            ))
+
+        collection = self._get_collection(company_id)
+        if collection.count() == 0:
+            result = {"products": [], "model_ids": []}
+            self._catalog_cache[company_id] = result
+            return result
+        data = collection.get(
+            where={"is_active": True},
+            include=["documents", "metadatas"],
+        )
+        products: dict[str, dict] = {}
+        all_model_ids: set[str] = set()
+        for raw_document, metadata in zip(
+            data.get("documents", []),
+            data.get("metadatas", []),
+        ):
+            document = self._display_content(raw_document)
+            local_labels = extract_product_labels(document)
+            product_keys = item_product_names(raw_document, metadata)
+            product_keys = {key for key in product_keys if key not in non_product_keys}
+            model_ids = {
+                model_id
+                for model_id in item_model_ids(raw_document, metadata)
+                if orderable_model_id(model_id)
+            }
+            all_model_ids.update(model_ids)
+            for key in product_keys:
+                candidate = local_labels.get(key, "")
+                entry = products.setdefault(key, {
+                    "key": key,
+                    "name": candidate or key,
+                    "model_ids": set(),
+                })
+                if candidate and (
+                    entry["name"] == key or len(candidate) > len(entry["name"])
+                ):
+                    entry["name"] = candidate
+                if len(product_keys) == 1:
+                    entry["model_ids"].update(model_ids)
+        result = {
+            "products": [
+                {
+                    "key": item["key"],
+                    "name": item["name"],
+                    "model_ids": sorted(item["model_ids"]),
+                }
+                for item in sorted(products.values(), key=lambda value: value["name"].casefold())
+            ],
+            "model_ids": sorted(all_model_ids),
+        }
+        self._catalog_cache[company_id] = result
+        return result
 
     def query(
         self,

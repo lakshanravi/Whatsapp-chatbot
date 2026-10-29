@@ -33,6 +33,7 @@ function isAllowedWidgetRoute(req) {
   if (req.method === "POST" && req.path === "/auth/google") return true;
   if (req.method === "POST" && req.path === "/auth/external") return true;
   if (req.method === "GET" && req.path.startsWith("/history/")) return true;
+  if (req.method === "POST" && req.path === "/realtime/session") return true;
 
   return false;
 }
@@ -141,6 +142,13 @@ function isValidGuestSessionId(sessionId) {
 
 function nowMs() {
   return Number(process.hrtime.bigint() / 1000000n);
+}
+
+function realtimeSafetyIdentifier(companyId, sessionId) {
+  return crypto
+    .createHmac("sha256", config.jwtSecret)
+    .update(`realtime:${companyId}:${sessionId}`)
+    .digest("hex");
 }
 
 function escapeRegex(value) {
@@ -298,6 +306,81 @@ router.post("/auth/external", async (req, res) => {
   }
 });
 
+router.post("/realtime/session", async (req, res) => {
+  try {
+    const company = await getCompanyOrFail(req.params.companyId);
+    await ensureWidgetAccess(req, company);
+    if (!config.openaiApiKey) {
+      return res.status(503).json({ error: "Realtime voice is not configured" });
+    }
+
+    const sessionId = String(req.body?.sessionId || createGuestSessionId()).slice(0, 180);
+    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.openaiApiKey}`,
+        "Content-Type": "application/json",
+        "OpenAI-Safety-Identifier": realtimeSafetyIdentifier(
+          company._id.toString(),
+          sessionId
+        ),
+      },
+      body: JSON.stringify({
+        expires_after: { anchor: "created_at", seconds: 600 },
+        session: {
+          type: "realtime",
+          model: config.openaiRealtimeModel,
+          output_modalities: ["audio"],
+          instructions: (
+            "You are the voice transport for Pentarix AI Assistant. "
+            + "Do not answer customer questions independently. Automatic responses are disabled. "
+            + "Only speak the exact approved answer supplied in each response request."
+          ),
+          audio: {
+            input: {
+              noise_reduction: { type: "near_field" },
+              transcription: {
+                model: config.openaiRealtimeTranscriptionModel,
+                prompt: "Customer support conversation. The customer may speak English, Sinhala, or Tamil. Preserve product names and SKUs exactly.",
+              },
+              turn_detection: {
+                type: "semantic_vad",
+                eagerness: "auto",
+                create_response: false,
+                interrupt_response: true,
+              },
+            },
+            output: {
+              voice: config.openaiRealtimeVoice,
+              speed: 1.0,
+            },
+          },
+        },
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("Realtime client secret error:", data);
+      return res.status(response.status).json({
+        error: "Voice service is temporarily unavailable",
+      });
+    }
+    return res.json({
+      value: data.value,
+      expiresAt: data.expires_at,
+      sessionId,
+      model: config.openaiRealtimeModel,
+      voice: config.openaiRealtimeVoice,
+      transcriptionModel: config.openaiRealtimeTranscriptionModel,
+    });
+  } catch (err) {
+    console.error("Realtime session creation failed:", err);
+    return res.status(err.statusCode || 502).json({
+      error: err.statusCode ? err.message : "Voice service is temporarily unavailable",
+    });
+  }
+});
+
 router.post("/", async (req, res) => {
   try {
     const requestStarted = nowMs();
@@ -365,6 +448,7 @@ router.post("/", async (req, res) => {
     const preprocessStarted = nowMs();
     const preprocessed = await preprocessUserMessage(originalMessage, {
       skipSmallTalk: isSuggestion === true,
+      responseLanguage: commerce.language,
     });
     timingsMs.preprocessing = nowMs() - preprocessStarted;
 
@@ -383,6 +467,7 @@ router.post("/", async (req, res) => {
         media: [],
         suggestions: [],
         conversationId: conversation._id,
+        language: conversation.preferredLanguage || "",
         diagnostics: {
           timingsMs,
           cache: { hit: false },

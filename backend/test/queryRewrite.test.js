@@ -22,3 +22,14 @@ test("allows spelling cleanup when the support request meaning is preserved", ()
 
   assert.equal(result.correctedQuestion, "Why is my controller not charging?");
 });
+
+test("preserves an unclear classification instead of inventing an intent", () => {
+  const result = parseAnalyzeResponse(JSON.stringify({
+    intent: "unclear",
+    reply: "I couldn't understand that clearly. Please repeat it.",
+    correctedQuestion: null,
+  }), "unintelligible transcript");
+
+  assert.equal(result.intent, "unclear");
+  assert.match(result.reply, /repeat/i);
+});

@@ -249,6 +249,16 @@ async function queryKnowledge({
   return data;
 }
 
+async function listPdfProducts(companyId) {
+  const { data } = await client.get("/catalog/products", {
+    params: { company_id: String(companyId) },
+  });
+  return {
+    products: Array.isArray(data?.products) ? data.products : [],
+    modelIds: Array.isArray(data?.model_ids) ? data.model_ids : [],
+  };
+}
+
 async function checkHealth() {
   const { data } = await client.get("/health");
   return data;
@@ -295,6 +305,7 @@ module.exports = {
   deleteDocumentVectors,
   setDocumentActive,
   queryKnowledge,
+  listPdfProducts,
   buildConversationRagContext,
   updateConversationRagContext,
   checkHealth,
