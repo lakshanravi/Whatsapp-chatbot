@@ -4,6 +4,7 @@ import {
   BookOpenText,
   CheckCircle2,
   MessageCircleMore,
+  Package,
   ShoppingCart,
   Sparkles,
 } from "lucide-react";
@@ -41,6 +42,7 @@ function ChannelRow({ name, detail, connected, onClick }) {
 export function DashboardOverview({ company, documents, conversations, setActiveSection }) {
   const [summary, setSummary] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
   const [channels, setChannels] = useState({ whatsapp: false, messenger: false });
   const [loading, setLoading] = useState(true);
 
@@ -49,15 +51,17 @@ export function DashboardOverview({ company, documents, conversations, setActive
     async function load() {
       setLoading(true);
       const safe = (promise) => promise.catch(() => null);
-      const [orderSummary, orderList, whatsapp, messenger] = await Promise.all([
+      const [orderSummary, orderList, productList, whatsapp, messenger] = await Promise.all([
         safe(api.orders.summary(company._id)),
         safe(api.orders.list(company._id, { limit: 5 })),
+        safe(api.products.list(company._id)),
         safe(api.whatsappIntegration.get(company._id)),
         safe(api.messengerIntegration.get(company._id)),
       ]);
       if (!cancelled) {
         setSummary(orderSummary);
         setOrders(orderList?.orders || []);
+        setProducts(productList || []);
         setChannels({ whatsapp: Boolean(whatsapp?.isActive), messenger: Boolean(messenger?.isActive) });
         setLoading(false);
       }
@@ -85,7 +89,7 @@ export function DashboardOverview({ company, documents, conversations, setActive
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={ShoppingCart} label="New orders" value={loading ? "—" : summary?.counts?.new || 0} detail="Waiting for your team to review" accent="emerald" />
-        <MetricCard icon={ShoppingCart} label="Total orders" value={loading ? "—" : summary?.total || 0} detail="Orders captured from every connected channel" accent="cyan" />
+        <MetricCard icon={Package} label="Active products" value={loading ? "—" : products.filter((product) => product.isActive !== false).length} detail="Products available to the assistant" accent="cyan" />
         <MetricCard icon={MessageCircleMore} label="Conversations" value={conversations.length} detail="Customer conversations across channels" accent="violet" />
         <MetricCard icon={BookOpenText} label="Knowledge files" value={documents.length} detail={`${documents.filter((item) => item.status === "indexed").length} ready for customer answers`} accent="amber" />
       </section>

@@ -20,6 +20,7 @@ const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
 const smsRoutes = require("./modules/sms/sms.routes");
 const backupsRouter = require("./routes/backups");
 const ordersRouter = require("./routes/orders");
+const productsRouter = require("./routes/products");
 const messengerIntegrationsRouter = require("./routes/messengerIntegrations");
 const messengerRoutes = require("./modules/messenger/messenger.routes");
 const mediaRouter = require("./routes/media");
@@ -68,6 +69,7 @@ app.use("/api/companies/:companyId/whatsapp-integration", requireAuth, canAccess
 app.use("/api/companies/:companyId/sms-integration", requireAuth, canAccessCompany, smsIntegrationsRouter);
 app.use("/api/companies/:companyId/messenger-integration", requireAuth, messengerIntegrationsRouter);
 app.use("/api/companies/:companyId/orders", requireAuth, ordersRouter);
+app.use("/api/companies/:companyId/products", requireAuth, productsRouter);
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/sms", smsRoutes);
 app.use("/api/messenger", messengerRoutes);

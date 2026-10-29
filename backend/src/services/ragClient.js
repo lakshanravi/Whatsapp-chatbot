@@ -49,6 +49,8 @@ function buildQueryCacheKey({
   preferredDocumentIds,
   preferredProductNames,
   preferredModelIds,
+  catalogProductNames,
+  catalogModelIds,
   responseLanguage,
 }) {
   const historyText = (history || []).slice(-16).join("\n").toLowerCase();
@@ -62,6 +64,8 @@ function buildQueryCacheKey({
     preferredDocumentIds: [...new Set(preferredDocumentIds || [])].sort(),
     preferredProductNames: normalizedStrings(preferredProductNames).sort(),
     preferredModelIds: normalizedStrings(preferredModelIds).sort(),
+    catalogProductNames: normalizedStrings(catalogProductNames).sort(),
+    catalogModelIds: normalizedStrings(catalogModelIds).sort(),
     responseLanguage: responseLanguage || "",
   });
 }
@@ -210,6 +214,8 @@ async function queryKnowledge({
   preferredDocumentIds,
   preferredProductNames,
   preferredModelIds,
+  catalogProductNames,
+  catalogModelIds,
   responseLanguage,
 }) {
   const cacheKey = buildQueryCacheKey({
@@ -220,6 +226,8 @@ async function queryKnowledge({
     preferredDocumentIds,
     preferredProductNames,
     preferredModelIds,
+    catalogProductNames,
+    catalogModelIds,
     responseLanguage,
   });
   const cached = queryCache.get(cacheKey);
@@ -241,6 +249,8 @@ async function queryKnowledge({
     preferred_document_ids: preferredDocumentIds || [],
     preferred_product_names: preferredProductNames || [],
     preferred_model_ids: preferredModelIds || [],
+    catalog_product_names: catalogProductNames || [],
+    catalog_model_ids: catalogModelIds || [],
     response_language: responseLanguage || "",
   });
 

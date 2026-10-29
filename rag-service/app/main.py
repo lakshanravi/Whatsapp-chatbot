@@ -287,6 +287,8 @@ def query_knowledge(request: QueryRequest):
                 preferred_document_ids=request.preferred_document_ids,
                 preferred_product_names=request.preferred_product_names,
                 preferred_model_ids=request.preferred_model_ids,
+                catalog_product_names=request.catalog_product_names,
+                catalog_model_ids=request.catalog_model_ids,
                 response_language=request.response_language,
             )
     except Exception as e:

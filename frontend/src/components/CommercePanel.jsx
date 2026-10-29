@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Package, Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, Package, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { api, formatDate } from "../lib/api";
 import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from "./ui";
 
@@ -9,10 +9,13 @@ const emptyProduct = {
   nameSi: "",
   nameTa: "",
   descriptionEn: "",
+  descriptionSi: "",
+  descriptionTa: "",
   price: "",
   currency: "LKR",
   stock: "",
-  variants: "",
+  variants: [],
+  imageUrl: "",
   isActive: true,
 };
 
@@ -62,10 +65,19 @@ function ProductManagement({ companyId }) {
       nameSi: product.name?.si || "",
       nameTa: product.name?.ta || "",
       descriptionEn: product.description?.en || "",
+      descriptionSi: product.description?.si || "",
+      descriptionTa: product.description?.ta || "",
       price: String(product.price ?? ""),
       currency: product.currency || "LKR",
       stock: product.stock === null || product.stock === undefined ? "" : String(product.stock),
-      variants: (product.variants || []).map((variant) => variant.name).join(", "),
+      variants: (product.variants || []).map((variant) => ({
+        name: variant.name || "",
+        sku: variant.sku || "",
+        priceAdjustment: String(variant.priceAdjustment ?? 0),
+        stock: variant.stock === null || variant.stock === undefined ? "" : String(variant.stock),
+        isActive: variant.isActive !== false,
+      })),
+      imageUrl: product.imageUrl || "",
       isActive: product.isActive !== false,
     });
   }
@@ -77,11 +89,18 @@ function ProductManagement({ companyId }) {
     const payload = {
       sku: form.sku,
       name: { en: form.nameEn, si: form.nameSi, ta: form.nameTa },
-      description: { en: form.descriptionEn },
+      description: { en: form.descriptionEn, si: form.descriptionSi, ta: form.descriptionTa },
       price: Number(form.price),
       currency: form.currency,
       stock: form.stock === "" ? null : Number(form.stock),
-      variants: form.variants.split(",").map((name) => name.trim()).filter(Boolean).map((name) => ({ name })),
+      variants: form.variants.map((variant) => ({
+        ...variant,
+        name: variant.name.trim(),
+        sku: variant.sku.trim(),
+        priceAdjustment: Number(variant.priceAdjustment || 0),
+        stock: variant.stock === "" ? null : Number(variant.stock),
+      })).filter((variant) => variant.name),
+      imageUrl: form.imageUrl,
       isActive: form.isActive,
     };
     setLoading(true);
@@ -110,12 +129,35 @@ function ProductManagement({ companyId }) {
     }
   }
 
+  function updateVariant(index, field, value) {
+    setForm((current) => ({
+      ...current,
+      variants: current.variants.map((variant, variantIndex) => (
+        variantIndex === index ? { ...variant, [field]: value } : variant
+      )),
+    }));
+  }
+
+  function addVariant() {
+    setForm((current) => ({
+      ...current,
+      variants: [...current.variants, { name: "", sku: "", priceAdjustment: "0", stock: "", isActive: true }],
+    }));
+  }
+
+  function removeVariant(index) {
+    setForm((current) => ({
+      ...current,
+      variants: current.variants.filter((_, variantIndex) => variantIndex !== index),
+    }));
+  }
+
   return (
     <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
       <form onSubmit={submit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div>
           <h2 className="text-lg font-bold">{editingId ? "Edit product" : "Add product"}</h2>
-          <p className="mt-1 text-sm text-slate-500">Products here can be ordered through WhatsApp and Messenger.</p>
+          <p className="mt-1 text-sm text-slate-500">This catalogue controls products, prices, options, and ordering across the website, WhatsApp, Messenger, and voice assistant.</p>
         </div>
         <Alert error={error} notice={notice} />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -126,9 +168,32 @@ function ProductManagement({ companyId }) {
           <Field label="Price"><TextInput required min="0" step="0.01" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
           <Field label="Currency"><TextInput required value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></Field>
           <Field label="Stock (blank = unlimited)"><TextInput min="0" type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></Field>
-          <Field label="Variants (comma separated)"><TextInput placeholder="Small, Medium, Large" value={form.variants} onChange={(e) => setForm({ ...form, variants: e.target.value })} /></Field>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div><div className="text-sm font-semibold text-slate-800">Product options</div><div className="text-xs text-slate-500">Add sizes, colours, or models and any price difference.</div></div>
+            <SecondaryButton type="button" onClick={addVariant}><Plus size={15} /> Add option</SecondaryButton>
+          </div>
+          <div className="mt-3 space-y-3">
+            {form.variants.map((variant, index) => (
+              <div key={index} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
+                <Field label="Option name"><TextInput required value={variant.name} placeholder="Smoke Grey" onChange={(e) => updateVariant(index, "name", e.target.value)} /></Field>
+                <Field label="Option SKU"><TextInput value={variant.sku} placeholder="LHS-KTL-17-GRY" onChange={(e) => updateVariant(index, "sku", e.target.value)} /></Field>
+                <Field label="Price adjustment"><TextInput type="number" step="0.01" value={variant.priceAdjustment} onChange={(e) => updateVariant(index, "priceAdjustment", e.target.value)} /></Field>
+                <Field label="Stock (blank = unlimited)"><TextInput type="number" min="0" value={variant.stock} onChange={(e) => updateVariant(index, "stock", e.target.value)} /></Field>
+                <div className="flex items-center justify-between gap-3 sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={variant.isActive} onChange={(e) => updateVariant(index, "isActive", e.target.checked)} /> Available</label>
+                  <SecondaryButton type="button" onClick={() => removeVariant(index)}><Trash2 size={15} /> Remove</SecondaryButton>
+                </div>
+              </div>
+            ))}
+            {!form.variants.length && <div className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-xs text-slate-500">No options. The base product will be ordered directly.</div>}
+          </div>
         </div>
         <Field label="English description"><TextArea value={form.descriptionEn} onChange={(e) => setForm({ ...form, descriptionEn: e.target.value })} /></Field>
+        <Field label="Sinhala description"><TextArea value={form.descriptionSi} onChange={(e) => setForm({ ...form, descriptionSi: e.target.value })} /></Field>
+        <Field label="Tamil description"><TextArea value={form.descriptionTa} onChange={(e) => setForm({ ...form, descriptionTa: e.target.value })} /></Field>
+        <Field label="Product image URL"><TextInput type="url" placeholder="https://example.com/product.jpg" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} /></Field>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Available for ordering</label>
         <div className="flex gap-2">
           <PrimaryButton type="submit" disabled={loading}>{editingId ? "Save changes" : "Add product"}</PrimaryButton>
@@ -145,7 +210,11 @@ function ProductManagement({ companyId }) {
           {products.map((product) => (
             <div key={product._id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700"><Package size={20} /></div>
+                {product.imageUrl ? (
+                  <img src={product.imageUrl} alt="" className="h-12 w-12 rounded-xl border border-slate-200 object-cover" />
+                ) : (
+                  <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><Package size={20} /></div>
+                )}
                 <div>
                   <div className="font-semibold">{product.name?.en || product.name?.si || product.name?.ta}</div>
                   <div className="text-sm text-slate-500">{product.sku} · {product.currency} {Number(product.price).toFixed(2)} · Stock {product.stock ?? "Unlimited"}</div>

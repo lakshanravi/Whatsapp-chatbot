@@ -423,7 +423,9 @@ router.post("/", async (req, res) => {
     const conversation = commerce.conversation;
 
     if (commerce.handled) {
-      const commerceMedia = await findQuestionMedia(company._id, originalMessage);
+      const catalogMedia = Array.isArray(commerce.media) ? commerce.media : [];
+      const pdfMedia = catalogMedia.length ? [] : await findQuestionMedia(company._id, originalMessage);
+      const commerceMedia = catalogMedia.length ? catalogMedia : pdfMedia;
       if (commerceMedia.length) {
         conversation.messages[conversation.messages.length - 1].media = commerceMedia;
         await conversation.save();
@@ -480,10 +482,22 @@ router.post("/", async (req, res) => {
       conversation.messages.slice(0, -1),
       conversation.ragContext
     );
+    if (commerce.catalogProduct) {
+      ragContext.preferredProductNames = [
+        commerce.catalogProduct.name,
+        ...(commerce.catalogProduct.alternateNames || []),
+      ].filter(Boolean);
+      ragContext.preferredModelIds = [commerce.catalogProduct.sku].filter(Boolean);
+      ragContext.preferredDocumentIds = [];
+    }
     const ragResult = await ragClient.queryKnowledge({
       companyId: company._id.toString(),
       question: preprocessed.question,
       responseLanguage: commerce.language,
+      catalogProductNames: commerce.catalogProduct
+        ? [commerce.catalogProduct.name, ...(commerce.catalogProduct.alternateNames || [])]
+        : [],
+      catalogModelIds: commerce.catalogProduct?.sku ? [commerce.catalogProduct.sku] : [],
       ...ragContext,
     });
     timingsMs.ragService = nowMs() - ragStarted;

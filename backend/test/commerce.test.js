@@ -7,6 +7,8 @@ const {
   isBack,
   isCancel,
   isLanguageRequest,
+  isCatalogListIntent,
+  isCommercialProductIntent,
   isNegative,
   isPlausibleAddress,
   isPlausibleName,
@@ -60,23 +62,26 @@ test("order contact details reject commands and obvious placeholders", () => {
   assert.equal(isPlausibleAddress("back"), false);
 });
 
-test("PDF catalog resolution rejects arbitrary sentences", () => {
+test("dashboard catalog resolution supports names, SKUs, and list choices", () => {
   const catalog = {
     products: [
-      { key: "aerobreeze", name: "AeroBreeze Table Fan", model_ids: ["LHSFAN16"] },
-      { key: "quickboil", name: "QuickBoil Glass Kettle", model_ids: ["LHSKTL17"] },
+      { productId: "p1", name: "AeroBreeze Table Fan", alternateNames: ["AeroBreeze මේස විදුලි පංකාව"], sku: "LHS-FAN-16", price: 8900 },
+      { productId: "p2", name: "QuickBoil Glass Kettle", alternateNames: ["QuickBoil වීදුරු කේතලය"], sku: "LHS-KTL-17", price: 6500 },
     ],
-    modelIds: ["LHSFAN16", "LHSKTL17"],
   };
-  assert.deepEqual(resolveCatalogProduct(catalog, "AeroBreeze Table Fan"), {
-    name: "AeroBreeze Table Fan",
-    sku: "",
-  });
+  assert.equal(resolveCatalogProduct(catalog, "AeroBreeze Table Fan").productId, "p1");
+  assert.equal(resolveCatalogProduct(catalog, "Do you have LHS-KTL-17?").productId, "p2");
   assert.equal(resolveCatalogProduct(catalog, "can i change the language"), null);
-  assert.deepEqual(resolveCatalogProduct(catalog, "2"), {
-    name: "QuickBoil Glass Kettle",
-    sku: "",
-  });
+  assert.equal(resolveCatalogProduct(catalog, "2").productId, "p2");
+});
+
+test("recognizes catalogue discovery and commercial product questions", () => {
+  assert.equal(isCatalogListIntent("what products do you have"), true);
+  assert.equal(isCatalogListIntent("show me your catalogue"), true);
+  assert.equal(isCatalogListIntent("monawada thiyena products"), true);
+  assert.equal(isCatalogListIntent("tell me the warranty"), false);
+  assert.equal(isCommercialProductIntent("How much is the QuickBoil kettle?"), true);
+  assert.equal(isCommercialProductIntent("Tell me its technical specifications"), false);
 });
 
 test("maps Messenger text and postback events and ignores echoes", () => {
@@ -132,7 +137,7 @@ test("conversation messages preserve extracted PDF media", async () => {
   assert.equal(conversation.messages[0].media[0].documentName, "Visual Guide.pdf");
 });
 
-test("PDF-only orders do not require a catalogue product or known price", async () => {
+test("legacy orders remain readable when a product reference is absent", async () => {
   const order = new Order({
     companyId: "507f1f77bcf86cd799439011",
     orderNumber: "ORD-TEST-1",

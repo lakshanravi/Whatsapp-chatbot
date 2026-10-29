@@ -958,6 +958,8 @@ class RAGEngine:
         preferred_document_ids: list[str] | None = None,
         preferred_product_names: list[str] | None = None,
         preferred_model_ids: list[str] | None = None,
+        catalog_product_names: list[str] | None = None,
+        catalog_model_ids: list[str] | None = None,
         response_language: str = "",
     ) -> QueryResponse:
         query_started = perf_counter()
@@ -1022,9 +1024,15 @@ class RAGEngine:
             for item in (preferred_model_ids or [])
             if (normalized := normalize_model_id(item))
         }
+        catalog_models = {
+            normalized
+            for item in (catalog_model_ids or [])
+            if (normalized := normalize_model_id(item))
+        }
         required_model_ids = set() if product_list_question else (
             explicit_model_ids
             or extract_model_ids(base_standalone_question)
+            or catalog_models
             or (preferred_models if scoped_history else set())
         )
         explicit_product_names = extract_product_names(question)
@@ -1033,9 +1041,15 @@ class RAGEngine:
             for item in (preferred_product_names or [])
             if (normalized := normalize_product_name(item))
         }
+        catalog_products = {
+            normalized
+            for item in (catalog_product_names or [])
+            if (normalized := normalize_product_name(item))
+        }
         required_product_names = set() if product_list_question else (
             explicit_product_names
             or extract_product_names(base_standalone_question)
+            or catalog_products
             or (preferred_products if scoped_history else set())
         )
         if not product_list_question and not required_product_names and scoped_history:

@@ -12,7 +12,9 @@ async function processCustomerMessage({ companyId, sessionId, channel, text, cus
     customer,
   });
   if (commerce.handled) {
-    const media = await findQuestionMedia(companyId, text);
+    const catalogMedia = Array.isArray(commerce.media) ? commerce.media : [];
+    const pdfMedia = catalogMedia.length ? [] : await findQuestionMedia(companyId, text);
+    const media = catalogMedia.length ? catalogMedia : pdfMedia;
     if (media.length && commerce.conversation?.messages?.length) {
       commerce.conversation.messages[commerce.conversation.messages.length - 1].media = media;
       await commerce.conversation.save();
@@ -37,10 +39,22 @@ async function processCustomerMessage({ companyId, sessionId, channel, text, cus
     conversation.messages.slice(0, -1),
     conversation.ragContext
   );
+  if (commerce.catalogProduct) {
+    ragContext.preferredProductNames = [
+      commerce.catalogProduct.name,
+      ...(commerce.catalogProduct.alternateNames || []),
+    ].filter(Boolean);
+    ragContext.preferredModelIds = [commerce.catalogProduct.sku].filter(Boolean);
+    ragContext.preferredDocumentIds = [];
+  }
   const ragResult = await ragClient.queryKnowledge({
     companyId: String(companyId),
     question: preprocessed.question,
     responseLanguage: language,
+    catalogProductNames: commerce.catalogProduct
+      ? [commerce.catalogProduct.name, ...(commerce.catalogProduct.alternateNames || [])]
+      : [],
+    catalogModelIds: commerce.catalogProduct?.sku ? [commerce.catalogProduct.sku] : [],
     ...ragContext,
   });
   const mapped = await mapSourcesWithMedia(companyId, ragResult.sources || []);

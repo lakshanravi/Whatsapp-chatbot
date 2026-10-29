@@ -11,6 +11,7 @@ import {
   MicOff,
   MessageSquare,
   MessagesSquare,
+  Package,
   Pencil,
   Plus,
   RefreshCcw,
@@ -228,6 +229,7 @@ export default function App() {
     : [
         { id: "dashboard", label: "Dashboard", icon: Activity },
         { id: "orders", label: "Orders", icon: ShoppingCart },
+        { id: "products", label: "Catalogue", icon: Package },
         { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
         { id: "messenger", label: "Messenger", icon: MessagesSquare },
         { id: "sms", label: "SMS", icon: MessageSquare },
@@ -239,6 +241,7 @@ export default function App() {
   const companyDashboardNav = [
     { id: "dashboard", label: "Overview", icon: Activity },
     { id: "orders", label: "Orders", icon: ShoppingCart },
+    { id: "products", label: "Catalogue", icon: Package },
     { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
     { id: "messenger", label: "Messenger", icon: MessagesSquare },
     { id: "sms", label: "SMS", icon: MessageSquare },
@@ -2042,7 +2045,7 @@ ${widgetScriptSrc()}`;
                 />
               )}
 
-              {["orders", "messenger"].includes(activeSection) && (
+              {["orders", "products", "messenger"].includes(activeSection) && (
                 <CommercePanel companyId={selectedCompany._id} section={activeSection} />
               )}
 

@@ -7,6 +7,17 @@ router.use(canAccessCompany);
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 function payload(body) {
+  const variants = Array.isArray(body.variants)
+    ? body.variants.map((variant) => ({
+      name: String(variant?.name || "").trim(),
+      sku: String(variant?.sku || "").trim(),
+      priceAdjustment: Number(variant?.priceAdjustment || 0),
+      stock: variant?.stock === "" || variant?.stock === null || variant?.stock === undefined
+        ? null
+        : Number(variant.stock),
+      isActive: variant?.isActive !== false,
+    })).filter((variant) => variant.name)
+    : [];
   return {
     sku: String(body.sku || "").trim(),
     name: {
@@ -24,7 +35,7 @@ function payload(body) {
     stock: body.stock === "" || body.stock === null || body.stock === undefined
       ? null
       : Number(body.stock),
-    variants: Array.isArray(body.variants) ? body.variants : [],
+    variants,
     imageUrl: String(body.imageUrl || "").trim(),
     isActive: body.isActive !== false,
   };
@@ -36,6 +47,15 @@ function validate(data) {
   if (!Number.isFinite(data.price) || data.price < 0) return "Price must be zero or greater";
   if (data.stock !== null && (!Number.isInteger(data.stock) || data.stock < 0)) {
     return "Stock must be a non-negative whole number";
+  }
+  if (data.variants.some((variant) => !Number.isFinite(variant.priceAdjustment))) {
+    return "Variant price adjustments must be valid numbers";
+  }
+  if (data.variants.some((variant) => variant.stock !== null && (!Number.isInteger(variant.stock) || variant.stock < 0))) {
+    return "Variant stock must be blank or a non-negative whole number";
+  }
+  if (data.imageUrl && !/^https?:\/\//i.test(data.imageUrl)) {
+    return "Product image must use an http:// or https:// URL";
   }
   return "";
 }
