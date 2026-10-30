@@ -2046,7 +2046,7 @@ ${widgetScriptSrc()}`;
               )}
 
               {["orders", "products", "messenger"].includes(activeSection) && (
-                <CommercePanel companyId={selectedCompany._id} section={activeSection} />
+                <CommercePanel companyId={selectedCompany._id} companyName={selectedCompany.name} section={activeSection} />
               )}
 
               {(activeSection === "settings" || activeSection === "companies") && (

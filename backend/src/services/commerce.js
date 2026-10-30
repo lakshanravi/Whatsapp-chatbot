@@ -18,6 +18,12 @@ const ACTION_LABELS = {
   ta: { back: "பின்செல்", cancel: "ரத்து செய்" },
 };
 
+const CART_LABELS = {
+  en: { add: "Add another product", view: "View cart", remove: "Remove item", checkout: "Checkout" },
+  si: { add: "තවත් භාණ්ඩයක් එක් කරන්න", view: "කරත්තය බලන්න", remove: "භාණ්ඩයක් ඉවත් කරන්න", checkout: "ඇණවුම අවසන් කරන්න" },
+  ta: { add: "மற்றொரு தயாரிப்பைச் சேர்", view: "கூடையைப் பார்", remove: "பொருளை அகற்று", checkout: "செக்அவுட்" },
+};
+
 const COPY = {
   en: {
     chooseLanguage: "Please choose your preferred language:",
@@ -39,6 +45,14 @@ const COPY = {
     confirmed: "Thank you. Your order {orderNumber} has been placed successfully. The seller will process it soon.",
     unavailable: "That option is currently unavailable. Please choose another one.",
     priceChanged: "The catalogue price changed while you were ordering. Please review the updated total before confirming:",
+    itemAdded: "Added to your cart.",
+    cartPrompt: "What would you like to do next?",
+    removePrompt: "Which item would you like to remove?",
+    removed: "The item was removed from your cart.",
+    cartEmpty: "Your cart is empty. Choose a product to continue.",
+    cartFull: "Your cart can contain up to 20 different items. Please checkout or remove an item.",
+    quantityLimit: "You can order up to 100 units of the same product option in one order.",
+    currencyMismatch: "That product uses a different currency and cannot be combined with this cart. Please complete this order first.",
   },
   si: {
     chooseLanguage: "කරුණාකර ඔබ කැමති භාෂාව තෝරන්න:",
@@ -60,6 +74,14 @@ const COPY = {
     confirmed: "ස්තුතියි. ඔබගේ {orderNumber} ඇණවුම සාර්ථකව ලැබුණා. විකුණුම්කරු එය ඉක්මනින් සකසනු ඇත.",
     unavailable: "එම විකල්පය දැනට නොමැත. වෙනත් එකක් තෝරන්න.",
     priceChanged: "ඔබ ඇණවුම් කරන අතරතුර නාමාවලි මිල වෙනස් විය. තහවුරු කිරීමට පෙර යාවත්කාලීන කළ මුළු මුදල පරීක්ෂා කරන්න:",
+    itemAdded: "භාණ්ඩය ඔබගේ කරත්තයට එක් කළා.",
+    cartPrompt: "ඊළඟට ඔබට කිරීමට අවශ්‍ය කුමක්ද?",
+    removePrompt: "ඔබ ඉවත් කිරීමට කැමති භාණ්ඩය කුමක්ද?",
+    removed: "භාණ්ඩය ඔබගේ කරත්තයෙන් ඉවත් කළා.",
+    cartEmpty: "ඔබගේ කරත්තය හිස්. ඉදිරියට යාමට භාණ්ඩයක් තෝරන්න.",
+    cartFull: "ඔබගේ කරත්තයට වෙනස් භාණ්ඩ 20ක් දක්වා එක් කළ හැක. ඇණවුම අවසන් කරන්න හෝ භාණ්ඩයක් ඉවත් කරන්න.",
+    quantityLimit: "එකම භාණ්ඩ විකල්පයෙන් එක් ඇණවුමකට ඒකක 100ක් දක්වා ඇණවුම් කළ හැක.",
+    currencyMismatch: "එම භාණ්ඩය වෙනත් මුදල් ඒකකයක් භාවිත කරන බැවින් මෙම කරත්තයට එක් කළ නොහැක. පළමුව මෙම ඇණවුම අවසන් කරන්න.",
   },
   ta: {
     chooseLanguage: "உங்களுக்கு விருப்பமான மொழியைத் தேர்ந்தெடுக்கவும்:",
@@ -81,6 +103,14 @@ const COPY = {
     confirmed: "நன்றி. உங்கள் {orderNumber} ஆர்டர் வெற்றிகரமாக பதிவு செய்யப்பட்டது. விற்பனையாளர் விரைவில் செயல்படுத்துவார்.",
     unavailable: "அந்த விருப்பம் தற்போது கிடைக்கவில்லை. வேறொன்றைத் தேர்ந்தெடுக்கவும்.",
     priceChanged: "நீங்கள் ஆர்டர் செய்யும் போது பட்டியல் விலை மாறியுள்ளது. உறுதிப்படுத்துவதற்கு முன் புதுப்பிக்கப்பட்ட மொத்தத்தைச் சரிபார்க்கவும்:",
+    itemAdded: "தயாரிப்பு உங்கள் கூடையில் சேர்க்கப்பட்டது.",
+    cartPrompt: "அடுத்து என்ன செய்ய விரும்புகிறீர்கள்?",
+    removePrompt: "எந்த பொருளை அகற்ற விரும்புகிறீர்கள்?",
+    removed: "பொருள் உங்கள் கூடையிலிருந்து அகற்றப்பட்டது.",
+    cartEmpty: "உங்கள் கூடை காலியாக உள்ளது. தொடர ஒரு தயாரிப்பைத் தேர்ந்தெடுக்கவும்.",
+    cartFull: "உங்கள் கூடையில் அதிகபட்சம் 20 வெவ்வேறு பொருட்கள் இருக்கலாம். செக்அவுட் செய்யவும் அல்லது ஒரு பொருளை அகற்றவும்.",
+    quantityLimit: "ஒரே தயாரிப்பு விருப்பத்தில் ஒரு ஆர்டருக்கு அதிகபட்சம் 100 அலகுகள் வரை ஆர்டர் செய்யலாம்.",
+    currencyMismatch: "அந்த தயாரிப்பு வேறு நாணயத்தைப் பயன்படுத்துவதால் இந்த கூடையில் சேர்க்க முடியாது. முதலில் இந்த ஆர்டரை முடிக்கவும்.",
   },
 };
 
@@ -194,6 +224,22 @@ function isChange(text) {
   return /^(change|edit|restart|වෙනස්|மாற்று|திருத்து)$/iu.test(normalize(text));
 }
 
+function isAddAnother(text) {
+  return /^(?:add\s+(?:another|more)(?:\s+(?:product|item))?|continue\s+shopping|තවත්\s+භාණ්ඩයක්\s+එක්\s+කරන්න|மற்றொரு\s+தயாரிப்பைச்\s+சேர்)$/iu.test(normalize(text));
+}
+
+function isViewCart(text) {
+  return /^(?:view|show|see)(?:\s+(?:my|the))?\s+(?:cart|basket)$|^(?:cart|basket|කරත්තය\s+බලන්න|கூடையைப்\s+பார்)$/iu.test(normalize(text));
+}
+
+function isRemoveItem(text) {
+  return /^(?:remove|delete)(?:\s+(?:an?\s+)?item)?$|^(?:භාණ්ඩයක්\s+ඉවත්\s+කරන්න|பொருளை\s+அகற்று)$/iu.test(normalize(text));
+}
+
+function isCheckout(text) {
+  return /^(?:checkout|check\s*out|finish\s+order|place\s+order|ඇණවුම\s+අවසන්\s+කරන්න|செக்அவுட்)$/iu.test(normalize(text));
+}
+
 function choiceIndex(text, length) {
   const number = Number.parseInt(String(text).trim(), 10);
   return Number.isInteger(number) && number >= 1 && number <= length ? number - 1 : -1;
@@ -204,6 +250,17 @@ function actionSuggestions(language, { back = true, cancel = true } = {}) {
   return [
     ...(back ? [{ label: labels.back, message: "Back" }] : []),
     ...(cancel ? [{ label: labels.cancel, message: "Cancel" }] : []),
+  ];
+}
+
+function cartActionSuggestions(language, { canRemove = true } = {}) {
+  const labels = CART_LABELS[language] || CART_LABELS.en;
+  return [
+    { label: labels.add, message: "Add another product" },
+    { label: labels.view, message: "View cart" },
+    ...(canRemove ? [{ label: labels.remove, message: "Remove item" }] : []),
+    { label: labels.checkout, message: "Checkout" },
+    ...actionSuggestions(language, { back: false }),
   ];
 }
 
@@ -252,11 +309,9 @@ async function loadProductCatalog(companyId, language = "en") {
       sku: product.sku || "",
       name: localizedText(product.name, language),
       alternateNames: Object.values(product.name || {}).filter(Boolean),
-      description: localizedText(product.description, language),
       price: Number(product.price || 0),
       currency: product.currency || "LKR",
       stock: product.stock,
-      imageUrl: product.imageUrl || "",
       variants: (product.variants || [])
         .filter((variant) => variant.isActive !== false)
         .map((variant) => ({
@@ -341,17 +396,6 @@ function commercialProductAnswer(product, language) {
   ].join("\n");
 }
 
-function productMedia(product) {
-  if (!product?.imageUrl) return [];
-  return [{
-    url: product.imageUrl,
-    altText: product.name || "Product image",
-    documentId: "",
-    documentName: "Product catalogue",
-    mimeType: "image",
-  }];
-}
-
 function stageResponse(state, copy, language, catalog, settings) {
   if (state.stage === "awaiting_product") {
     return {
@@ -376,6 +420,24 @@ function stageResponse(state, copy, language, catalog, settings) {
   }
   if (state.stage === "awaiting_quantity") {
     return { answer: copy.askQuantity, suggestions: actionSuggestions(language) };
+  }
+  if (state.stage === "awaiting_cart_action") {
+    return {
+      answer: `${cartSummary(state.draft || {}, language, settings)}\n\n${copy.cartPrompt}`,
+      suggestions: cartActionSuggestions(language, { canRemove: (state.draft?.items || []).length > 0 }),
+    };
+  }
+  if (state.stage === "awaiting_remove_item") {
+    return {
+      answer: copy.removePrompt,
+      suggestions: [
+        ...(state.draft?.items || []).map((item, index) => ({
+          label: `${index + 1}. ${item.productName}${item.variant ? ` (${item.variant})` : ""}`,
+          message: `Remove ${index + 1}`,
+        })),
+        ...actionSuggestions(language),
+      ],
+    };
   }
   if (state.stage === "awaiting_name") {
     return { answer: copy.askName, suggestions: actionSuggestions(language) };
@@ -410,7 +472,9 @@ function previousOrderStage(stage) {
   return {
     awaiting_variant: "awaiting_product",
     awaiting_quantity: "awaiting_product",
-    awaiting_name: "awaiting_quantity",
+    awaiting_cart_action: "awaiting_product",
+    awaiting_remove_item: "awaiting_cart_action",
+    awaiting_name: "awaiting_cart_action",
     awaiting_phone: "awaiting_name",
     awaiting_address: "awaiting_phone",
     awaiting_payment: "awaiting_address",
@@ -433,32 +497,109 @@ async function addReply(conversation, answer, extra = {}) {
   return { handled: true, answer, sources: [], conversation, ...extra };
 }
 
-function orderSummary(draft, language, settings) {
-  const quantity = Number(draft.quantity || 0);
-  const subtotal = Number(draft.unitPrice || 0) * quantity;
+function currentItemFromDraft(draft) {
+  if (!draft.productId || !Number.isInteger(Number(draft.quantity)) || Number(draft.quantity) < 1) {
+    return null;
+  }
+  return {
+    productId: draft.productId,
+    sku: draft.sku || "",
+    productName: draft.productName,
+    variant: draft.variant || "",
+    variantId: draft.variantId || "",
+    quantity: Number(draft.quantity),
+    unitPrice: Number(draft.unitPrice || 0),
+    baseUnitPrice: Number(draft.baseUnitPrice || 0),
+    currency: draft.currency || "LKR",
+  };
+}
+
+function clearCurrentItem(draft) {
+  [
+    "productId", "sku", "productName", "variant", "variantId", "quantity",
+    "unitPrice", "baseUnitPrice", "currency", "variants",
+  ].forEach((key) => delete draft[key]);
+}
+
+function addCurrentItemToCart(draft) {
+  const item = currentItemFromDraft(draft);
+  if (!item) return { ok: false, reason: "invalid" };
+  const items = Array.isArray(draft.items) ? draft.items : [];
+  const cartCurrency = items[0]?.currency;
+  if (cartCurrency && cartCurrency !== item.currency) return { ok: false, reason: "currency" };
+  const existing = items.find((entry) => (
+    String(entry.productId) === String(item.productId)
+    && String(entry.variantId || "") === String(item.variantId || "")
+    && normalize(entry.variant || "") === normalize(item.variant || "")
+  ));
+  if (existing) {
+    if (Number(existing.quantity || 0) + item.quantity > 100) {
+      return { ok: false, reason: "quantity" };
+    }
+    existing.quantity = Number(existing.quantity || 0) + item.quantity;
+    existing.unitPrice = item.unitPrice;
+    existing.baseUnitPrice = item.baseUnitPrice;
+    existing.sku = item.sku;
+    existing.productName = item.productName;
+  } else {
+    if (items.length >= 20) return { ok: false, reason: "full" };
+    items.push(item);
+  }
+  draft.items = items;
+  clearCurrentItem(draft);
+  return { ok: true, item };
+}
+
+function cartTotals(draft, settings = {}) {
+  const items = Array.isArray(draft.items) ? draft.items : [];
+  const subtotal = items.reduce((sum, item) => (
+    sum + Number(item.unitPrice || 0) * Number(item.quantity || 0)
+  ), 0);
   const deliveryFee = Number(settings.deliveryFee || 0);
-  const total = subtotal + deliveryFee;
+  return { subtotal, deliveryFee, total: subtotal + deliveryFee };
+}
+
+function cartSummary(draft, language, settings = {}) {
+  const items = Array.isArray(draft.items) ? draft.items : [];
+  const { subtotal } = cartTotals(draft, settings);
+  const currency = items[0]?.currency || settings.currency || "LKR";
+  const heading = language === "si" ? "ඔබගේ කරත්තය" : language === "ta" ? "உங்கள் கூடை" : "Your cart";
+  const subtotalLabel = language === "si" ? "අතුරු එකතුව" : language === "ta" ? "கூட்டுத்தொகை" : "Subtotal";
+  const lines = items.map((item, index) => {
+    const lineTotal = Number(item.unitPrice || 0) * Number(item.quantity || 0);
+    return `${index + 1}. ${item.productName}${item.variant ? ` (${item.variant})` : ""}\n   ${item.quantity} × ${formatMoney(item.unitPrice, item.currency || currency)} = ${formatMoney(lineTotal, item.currency || currency)}`;
+  });
+  return `${heading}\n\n${lines.join("\n\n")}\n\n${subtotalLabel}: ${formatMoney(subtotal, currency)}`;
+}
+
+function orderSummary(draft, language, settings) {
+  const items = Array.isArray(draft.items) ? draft.items : [];
+  const { subtotal, deliveryFee, total } = cartTotals(draft, settings);
+  const currency = items[0]?.currency || settings.currency || "LKR";
   const labels = language === "si"
-    ? ["භාණ්ඩය", "ප්‍රමාණය", "නම", "දුරකථනය", "ලිපිනය", "ගෙවීම", "මුළු එකතුව"]
+    ? ["භාණ්ඩ", "නම", "දුරකථනය", "ලිපිනය", "ගෙවීම", "අතුරු එකතුව", "බෙදාහැරීම", "මුළු එකතුව"]
     : language === "ta"
-      ? ["தயாரிப்பு", "அளவு", "பெயர்", "தொலைபேசி", "முகவரி", "கட்டணம்", "மொத்தம்"]
-      : ["Product", "Quantity", "Name", "Phone", "Address", "Payment", "Total"];
+      ? ["பொருட்கள்", "பெயர்", "தொலைபேசி", "முகவரி", "கட்டணம்", "கூட்டுத்தொகை", "டெலிவரி", "மொத்தம்"]
+      : ["Items", "Name", "Phone", "Address", "Payment", "Subtotal", "Delivery", "Total"];
+  const itemLines = items.map((item, index) => (
+    `${index + 1}. ${item.productName}${item.variant ? ` (${item.variant})` : ""} — ${item.quantity} × ${formatMoney(item.unitPrice, item.currency || currency)}`
+  )).join("\n");
   return [
-    `${labels[0]}: ${draft.productName}${draft.variant ? ` (${draft.variant})` : ""}`,
-    `${labels[1]}: ${quantity}`,
-    `${labels[2]}: ${draft.customerName}`,
-    `${labels[3]}: ${draft.customerPhone || "-"}`,
-    `${labels[4]}: ${draft.deliveryAddress}`,
-    `${labels[5]}: ${draft.paymentMethod}`,
-    `${labels[6]}: ${formatMoney(total, draft.currency || settings.currency || "LKR")}`,
+    `${labels[0]}:\n${itemLines}`,
+    `${labels[1]}: ${draft.customerName}`,
+    `${labels[2]}: ${draft.customerPhone || "-"}`,
+    `${labels[3]}: ${draft.deliveryAddress}`,
+    `${labels[4]}: ${draft.paymentMethod}`,
+    `${labels[5]}: ${formatMoney(subtotal, currency)}`,
+    ...(deliveryFee ? [`${labels[6]}: ${formatMoney(deliveryFee, currency)}`] : []),
+    `${labels[7]}: ${formatMoney(total, currency)}`,
   ].join("\n");
 }
 
 function hasCompleteDraft(draft) {
   return Boolean(
-    draft.productName
-    && Number.isInteger(Number(draft.quantity))
-    && Number(draft.quantity) > 0
+    Array.isArray(draft.items)
+    && draft.items.length > 0
     && draft.customerName
     && draft.customerPhone
     && draft.deliveryAddress
@@ -472,6 +613,7 @@ async function createOrderNumber() {
 
 function selectProductForOrder(state, product) {
   const draft = state.draft || {};
+  clearCurrentItem(draft);
   Object.assign(draft, {
     productId: product.productId,
     productName: product.name.slice(0, 200),
@@ -517,6 +659,24 @@ async function refreshDraftProduct(companyId, draft, language) {
   draft.baseUnitPrice = Number(product.price || 0);
   draft.currency = product.currency || "LKR";
   return { available: true, priceChanged };
+}
+
+function startCheckout(state, draft, conversation, copy, language) {
+  if (conversation.customerName) {
+    draft.customerName = conversation.customerName;
+    if (conversation.customerPhone) {
+      draft.customerPhone = conversation.customerPhone;
+      state.stage = "awaiting_address";
+      state.draft = draft;
+      return { answer: copy.askAddress, suggestions: actionSuggestions(language) };
+    }
+    state.stage = "awaiting_phone";
+    state.draft = draft;
+    return { answer: copy.askPhone, suggestions: actionSuggestions(language) };
+  }
+  state.stage = "awaiting_name";
+  state.draft = draft;
+  return { answer: copy.askName, suggestions: actionSuggestions(language) };
 }
 
 async function getConversation({ companyId, sessionId, channel, customer = {} }) {
@@ -634,9 +794,14 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
   }
 
   if (state.stage !== "browsing" && isBack(message)) {
-    state.stage = state.stage === "awaiting_quantity" && draft.variants?.length
-      ? "awaiting_variant"
-      : previousOrderStage(state.stage);
+    if (state.stage === "awaiting_product" && (draft.items || []).length) {
+      clearCurrentItem(draft);
+      state.stage = "awaiting_cart_action";
+    } else {
+      state.stage = state.stage === "awaiting_quantity" && draft.variants?.length
+        ? "awaiting_variant"
+        : previousOrderStage(state.stage);
+    }
     state.draft = draft;
     conversation.commerceState = state;
     const catalog = state.stage === "awaiting_product"
@@ -647,15 +812,18 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
   }
 
   if (state.stage !== "browsing" && state.stage !== "awaiting_confirmation" && isChange(message)) {
-    resetDraft(conversation, "awaiting_product");
-    const catalog = await loadProductCatalog(companyId, language);
-    const response = stageResponse(
-      conversation.commerceState,
-      copy,
-      language,
-      catalog,
-      settings
-    );
+    if ((draft.items || []).length) {
+      clearCurrentItem(draft);
+      state.stage = "awaiting_cart_action";
+      state.draft = draft;
+      conversation.commerceState = state;
+    } else {
+      resetDraft(conversation, "awaiting_product");
+    }
+    const catalog = conversation.commerceState.stage === "awaiting_product"
+      ? await loadProductCatalog(companyId, language)
+      : { products: [] };
+    const response = stageResponse(conversation.commerceState, copy, language, catalog, settings);
     return addReply(conversation, response.answer, { suggestions: response.suggestions });
   }
 
@@ -670,7 +838,6 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     const mentionedProduct = resolveCatalogProduct(catalog, message);
     if (mentionedProduct && isCommercialProductIntent(message)) {
       return addReply(conversation, commercialProductAnswer(mentionedProduct, language), {
-        media: productMedia(mentionedProduct),
         suggestions: [
           { label: language === "si" ? "වැඩි විස්තර" : language === "ta" ? "மேலும் விவரங்கள்" : "More details", message: `Tell me more about ${mentionedProduct.name}` },
           { label: language === "si" ? "ඇණවුම් කරන්න" : language === "ta" ? "ஆர்டர் செய்" : "Order", message: `Order ${mentionedProduct.name}` },
@@ -685,7 +852,7 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
       return addReply(conversation, copy.noProducts);
     }
     state.stage = "awaiting_product";
-    state.draft = {};
+    state.draft = { items: [] };
     conversation.commerceState = state;
     if (mentionedProduct) {
       selectProductForOrder(state, mentionedProduct);
@@ -694,6 +861,67 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     }
     const response = stageResponse(state, copy, language, catalog, settings);
     return addReply(conversation, response.answer, { suggestions: response.suggestions });
+  }
+
+  if (state.stage === "awaiting_cart_action") {
+    if (!(draft.items || []).length) {
+      state.stage = "awaiting_product";
+      state.draft = draft;
+      const catalog = await loadProductCatalog(companyId, language);
+      const response = stageResponse(state, copy, language, catalog, settings);
+      return addReply(conversation, `${copy.cartEmpty}\n\n${response.answer}`, {
+        suggestions: response.suggestions,
+      });
+    }
+    if (isAddAnother(message)) {
+      if (draft.items.length >= 20) {
+        return addReply(conversation, copy.cartFull, {
+          suggestions: cartActionSuggestions(language),
+        });
+      }
+      state.stage = "awaiting_product";
+      state.draft = draft;
+      const catalog = await loadProductCatalog(companyId, language);
+      const response = stageResponse(state, copy, language, catalog, settings);
+      return addReply(conversation, response.answer, { suggestions: response.suggestions });
+    }
+    if (isRemoveItem(message)) {
+      state.stage = "awaiting_remove_item";
+      state.draft = draft;
+      const response = stageResponse(state, copy, language, { products: [] }, settings);
+      return addReply(conversation, response.answer, { suggestions: response.suggestions });
+    }
+    if (isCheckout(message)) {
+      const response = startCheckout(state, draft, conversation, copy, language);
+      return addReply(conversation, response.answer, { suggestions: response.suggestions });
+    }
+    const response = stageResponse(state, copy, language, { products: [] }, settings);
+    return addReply(conversation, response.answer, { suggestions: response.suggestions });
+  }
+
+  if (state.stage === "awaiting_remove_item") {
+    const match = normalize(message).match(/^remove\s+(\d{1,2})$/i);
+    const index = match ? Number(match[1]) - 1 : choiceIndex(message, (draft.items || []).length);
+    if (!Number.isInteger(index) || index < 0 || index >= (draft.items || []).length) {
+      const response = stageResponse(state, copy, language, { products: [] }, settings);
+      return addReply(conversation, response.answer, { suggestions: response.suggestions });
+    }
+    draft.items.splice(index, 1);
+    if (!draft.items.length) {
+      state.stage = "awaiting_product";
+      state.draft = draft;
+      const catalog = await loadProductCatalog(companyId, language);
+      const response = stageResponse(state, copy, language, catalog, settings);
+      return addReply(conversation, `${copy.removed}\n\n${copy.cartEmpty}\n\n${response.answer}`, {
+        suggestions: response.suggestions,
+      });
+    }
+    state.stage = "awaiting_cart_action";
+    state.draft = draft;
+    const response = stageResponse(state, copy, language, { products: [] }, settings);
+    return addReply(conversation, `${copy.removed}\n\n${response.answer}`, {
+      suggestions: response.suggestions,
+    });
   }
 
   if (state.stage === "awaiting_product") {
@@ -740,26 +968,30 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
     }
     const quantity = Number(message);
     draft.quantity = quantity;
-    if (conversation.customerName) {
-      draft.customerName = conversation.customerName;
-      if (conversation.customerPhone) {
-        draft.customerPhone = conversation.customerPhone;
-        state.stage = "awaiting_address";
-        state.draft = draft;
-        return addReply(conversation, copy.askAddress, {
-          suggestions: actionSuggestions(language),
-        });
-      }
-      state.stage = "awaiting_phone";
+    const added = addCurrentItemToCart(draft);
+    if (!added.ok) {
+      const errorMessage = added.reason === "currency"
+        ? copy.currencyMismatch
+        : added.reason === "full"
+          ? copy.cartFull
+          : added.reason === "quantity"
+            ? copy.quantityLimit
+            : copy.invalidQuantity;
+      if (added.reason === "quantity") delete draft.quantity;
+      state.stage = added.reason === "currency" || added.reason === "full"
+        ? "awaiting_cart_action"
+        : "awaiting_quantity";
       state.draft = draft;
-      return addReply(conversation, copy.askPhone, {
-        suggestions: actionSuggestions(language),
+      const response = stageResponse(state, copy, language, { products: [] }, settings);
+      return addReply(conversation, `${errorMessage}\n\n${response.answer}`, {
+        suggestions: response.suggestions,
       });
     }
-    state.stage = "awaiting_name";
+    state.stage = "awaiting_cart_action";
     state.draft = draft;
-    return addReply(conversation, copy.askName, {
-      suggestions: actionSuggestions(language),
+    const response = stageResponse(state, copy, language, { products: [] }, settings);
+    return addReply(conversation, `${copy.itemAdded}\n\n${response.answer}`, {
+      suggestions: response.suggestions,
     });
   }
 
@@ -842,8 +1074,11 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
 
   if (state.stage === "awaiting_confirmation") {
     if (isChange(message)) {
-      resetDraft(conversation, "awaiting_product");
-      return addReply(conversation, copy.restarted);
+      state.stage = "awaiting_cart_action";
+      state.draft = draft;
+      conversation.commerceState = state;
+      const response = stageResponse(state, copy, language, { products: [] }, settings);
+      return addReply(conversation, response.answer, { suggestions: response.suggestions });
     }
     if (!isConfirm(message)) {
       const summary = orderSummary(draft, language, settings);
@@ -855,16 +1090,47 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
       resetDraft(conversation, "awaiting_product");
       return addReply(conversation, copy.restarted);
     }
-    const refreshed = await refreshDraftProduct(companyId, draft, language);
-    if (!refreshed.available) {
-      resetDraft(conversation, "awaiting_product");
-      const catalog = await loadProductCatalog(companyId, language);
-      const response = stageResponse(conversation.commerceState, copy, language, catalog, settings);
-      return addReply(conversation, `${copy.unavailable}\n\n${response.answer}`, {
+    let priceChanged = false;
+    let unavailableItem = null;
+    for (const item of draft.items) {
+      const refreshed = await refreshDraftProduct(companyId, item, language);
+      if (!refreshed.available) {
+        unavailableItem = item;
+        break;
+      }
+      priceChanged = priceChanged || refreshed.priceChanged;
+    }
+    if (unavailableItem) {
+      draft.items = draft.items.filter((item) => item !== unavailableItem);
+      if (!draft.items.length) {
+        state.stage = "awaiting_product";
+        const catalog = await loadProductCatalog(companyId, language);
+        state.draft = draft;
+        conversation.commerceState = state;
+        const response = stageResponse(state, copy, language, catalog, settings);
+        return addReply(conversation, `${unavailableItem.productName}: ${copy.unavailable}\n\n${copy.cartEmpty}\n\n${response.answer}`, {
+          suggestions: response.suggestions,
+        });
+      }
+      state.stage = "awaiting_cart_action";
+      state.draft = draft;
+      conversation.commerceState = state;
+      const response = stageResponse(state, copy, language, { products: [] }, settings);
+      return addReply(conversation, `${unavailableItem.productName}: ${copy.unavailable}\n\n${response.answer}`, {
         suggestions: response.suggestions,
       });
     }
-    if (refreshed.priceChanged) {
+    const currencies = new Set(draft.items.map((item) => item.currency || settings.currency || "LKR"));
+    if (currencies.size > 1) {
+      state.stage = "awaiting_cart_action";
+      state.draft = draft;
+      conversation.commerceState = state;
+      const response = stageResponse(state, copy, language, { products: [] }, settings);
+      return addReply(conversation, `${copy.currencyMismatch}\n\n${response.answer}`, {
+        suggestions: response.suggestions,
+      });
+    }
+    if (priceChanged) {
       state.draft = draft;
       conversation.commerceState = state;
       const summary = orderSummary(draft, language, settings);
@@ -872,8 +1138,8 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
         suggestions: ["Confirm", "Change", "Cancel"].map((item) => ({ label: item, message: item })),
       });
     }
-    const subtotal = Number(draft.unitPrice || 0) * Number(draft.quantity || 0);
-    const deliveryFee = Number(settings.deliveryFee || 0);
+    const { subtotal, deliveryFee, total } = cartTotals(draft, settings);
+    const currency = draft.items[0]?.currency || settings.currency || "LKR";
     const order = await Order.create({
       companyId,
       orderNumber: await createOrderNumber(),
@@ -887,19 +1153,19 @@ async function processCommerceMessage({ companyId, sessionId, channel, text, cus
         externalId: customer.externalId || conversation.customerExternalId || "",
         deliveryAddress: draft.deliveryAddress,
       },
-      items: [{
-        productId: draft.productId || null,
-        sku: draft.sku || "",
-        name: draft.productName,
-        variant: draft.variant || "",
-        quantity: draft.quantity,
-        unitPrice: draft.unitPrice,
-        lineTotal: subtotal,
-      }],
+      items: draft.items.map((item) => ({
+        productId: item.productId || null,
+        sku: item.sku || "",
+        name: item.productName,
+        variant: item.variant || "",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: Number(item.unitPrice || 0) * Number(item.quantity || 0),
+      })),
       subtotal,
       deliveryFee,
-      total: subtotal + deliveryFee,
-      currency: draft.currency || settings.currency || "LKR",
+      total,
+      currency,
       paymentMethod: draft.paymentMethod,
       priceStatus: "confirmed",
     });
@@ -931,7 +1197,14 @@ module.exports = {
   localizedText,
   isCatalogListIntent,
   isCommercialProductIntent,
+  isAddAnother,
+  isCheckout,
+  isRemoveItem,
+  isViewCart,
   formatMoney,
+  addCurrentItemToCart,
+  cartTotals,
+  cartSummary,
   resolveCatalogProduct,
   processCommerceMessage,
 };

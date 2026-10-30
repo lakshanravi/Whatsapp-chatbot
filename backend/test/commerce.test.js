@@ -9,15 +9,23 @@ const {
   isLanguageRequest,
   isCatalogListIntent,
   isCommercialProductIntent,
+  isAddAnother,
+  isCheckout,
+  isRemoveItem,
+  isViewCart,
   isNegative,
   isPlausibleAddress,
   isPlausibleName,
   isPlausiblePhone,
   isValidQuantity,
   localizedText,
+  addCurrentItemToCart,
+  cartTotals,
+  cartSummary,
   resolveCatalogProduct,
 } = require("../src/services/commerce");
 const { mapIncomingWebhook } = require("../src/modules/messenger/messenger.mapper");
+const { mapIncomingWebhook: mapWhatsAppWebhook } = require("../src/modules/whatsapp/whatsapp.mapper");
 const Conversation = require("../src/models/Conversation");
 const Order = require("../src/models/Order");
 
@@ -84,6 +92,66 @@ test("recognizes catalogue discovery and commercial product questions", () => {
   assert.equal(isCommercialProductIntent("Tell me its technical specifications"), false);
 });
 
+test("recognizes clickable cart actions", () => {
+  assert.equal(isAddAnother("Add another product"), true);
+  assert.equal(isViewCart("View cart"), true);
+  assert.equal(isRemoveItem("Remove item"), true);
+  assert.equal(isCheckout("Checkout"), true);
+});
+
+test("adds different items and merges the same product option", () => {
+  const draft = {
+    items: [],
+    productId: "p1",
+    productName: "QuickBoil Glass Kettle",
+    sku: "KTL-WHT",
+    variant: "White",
+    variantId: "v1",
+    quantity: 2,
+    unitPrice: 6500,
+    baseUnitPrice: 6500,
+    currency: "LKR",
+  };
+  assert.equal(addCurrentItemToCart(draft).ok, true);
+  Object.assign(draft, {
+    productId: "p1",
+    productName: "QuickBoil Glass Kettle",
+    sku: "KTL-WHT",
+    variant: "White",
+    variantId: "v1",
+    quantity: 3,
+    unitPrice: 6500,
+    baseUnitPrice: 6500,
+    currency: "LKR",
+  });
+  assert.equal(addCurrentItemToCart(draft).ok, true);
+  assert.equal(draft.items.length, 1);
+  assert.equal(draft.items[0].quantity, 5);
+  assert.deepEqual(cartTotals(draft, { deliveryFee: 500 }), {
+    subtotal: 32500,
+    deliveryFee: 500,
+    total: 33000,
+  });
+  assert.match(cartSummary(draft, "en", { deliveryFee: 500 }), /5 × LKR 6,500\.00 = LKR 32,500\.00/);
+});
+
+test("rejects mixed currencies and more than 100 of one option", () => {
+  const draft = {
+    items: [{
+      productId: "p1", productName: "Fan", variantId: "", variant: "",
+      quantity: 95, unitPrice: 1000, baseUnitPrice: 1000, currency: "LKR",
+    }],
+    productId: "p1", productName: "Fan", quantity: 6,
+    unitPrice: 1000, baseUnitPrice: 1000, currency: "LKR",
+  };
+  assert.equal(addCurrentItemToCart(draft).reason, "quantity");
+  Object.assign(draft, {
+    productId: "p2", productName: "Other", quantity: 1,
+    unitPrice: 10, baseUnitPrice: 10, currency: "USD",
+  });
+  assert.equal(addCurrentItemToCart(draft).reason, "currency");
+});
+
 test("maps Messenger text and postback events and ignores echoes", () => {
   const result = mapIncomingWebhook({
     entry: [{
@@ -99,6 +167,20 @@ test("maps Messenger text and postback events and ignores echoes", () => {
   assert.deepEqual(result.map((item) => item.text), ["English", "Order"]);
   assert.equal(result[0].pageId, "page-1");
   assert.equal(result[0].senderId, "customer-1");
+});
+
+test("WhatsApp interactive choices use their stable action IDs", () => {
+  const [button, list] = mapWhatsAppWebhook({
+    entry: [{ changes: [{ value: {
+      metadata: { phone_number_id: "phone-1" },
+      messages: [
+        { id: "wa-1", from: "customer", type: "interactive", interactive: { type: "button_reply", button_reply: { id: "Checkout", title: "செக்அவுட்" } } },
+        { id: "wa-2", from: "customer", type: "interactive", interactive: { type: "list_reply", list_reply: { id: "Remove 2", title: "2. Fan" } } },
+      ],
+    } }] }],
+  });
+  assert.equal(button.textBody, "Checkout");
+  assert.equal(list.textBody, "Remove 2");
 });
 
 test("conversation schema supports Messenger language and order state", async () => {
@@ -152,4 +234,26 @@ test("legacy orders remain readable when a product reference is absent", async (
   await order.validate();
   assert.equal(order.items[0].productId, null);
   assert.equal(order.priceStatus, "pending");
+});
+
+test("order schema accepts a confirmed multi-item cart", async () => {
+  const order = new Order({
+    companyId: "507f1f77bcf86cd799439011",
+    orderNumber: "ORD-MULTI-1",
+    sessionId: "web-multi-test",
+    channel: "web",
+    customer: { name: "Test User", phone: "0771234567", deliveryAddress: "Colombo" },
+    items: [
+      { name: "Kettle", quantity: 2, unitPrice: 6500, lineTotal: 13000 },
+      { name: "Fan", variant: "Black", quantity: 1, unitPrice: 8900, lineTotal: 8900 },
+    ],
+    subtotal: 21900,
+    deliveryFee: 500,
+    total: 22400,
+    paymentMethod: "Cash on delivery",
+    priceStatus: "confirmed",
+  });
+  await order.validate();
+  assert.equal(order.items.length, 2);
+  assert.equal(order.total, 22400);
 });

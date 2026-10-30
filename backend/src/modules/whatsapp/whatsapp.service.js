@@ -197,10 +197,35 @@ async function sendImageMessage({ to, imageUrl, caption = "", integration }) {
 
 async function sendChoiceMessage({ to, text, suggestions, integration }) {
   const accessToken = integration.getAccessToken();
-  const buttons = suggestions.slice(0, 3).map((suggestion, index) => ({
-    type: "reply",
-    reply: { id: `choice_${index + 1}`, title: String(suggestion.label).slice(0, 20) },
-  }));
+  const choices = suggestions.slice(0, 10);
+  const interactive = choices.length <= 3
+    ? {
+      type: "button",
+      body: { text: String(text).slice(0, 1024) },
+      action: {
+        buttons: choices.map((suggestion) => ({
+          type: "reply",
+          reply: {
+            id: String(suggestion.message || suggestion.label).slice(0, 256),
+            title: String(suggestion.label).slice(0, 20),
+          },
+        })),
+      },
+    }
+    : {
+      type: "list",
+      body: { text: String(text).slice(0, 1024) },
+      action: {
+        button: "Choose an option",
+        sections: [{
+          title: "Available actions",
+          rows: choices.map((suggestion) => ({
+            id: String(suggestion.message || suggestion.label).slice(0, 200),
+            title: String(suggestion.label).slice(0, 24),
+          })),
+        }],
+      },
+    };
   const response = await axios.post(
     buildMessagesUrl(integration.phoneNumberId),
     {
@@ -208,7 +233,7 @@ async function sendChoiceMessage({ to, text, suggestions, integration }) {
       recipient_type: "individual",
       to: String(to).trim(),
       type: "interactive",
-      interactive: { type: "button", body: { text: String(text).slice(0, 1024) }, action: { buttons } },
+      interactive,
     },
     { headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } }
   );

@@ -13,11 +13,11 @@ function getMessageText(message) {
 
   if (message.type === "interactive") {
     if (message.interactive?.type === "button_reply") {
-      return message.interactive.button_reply?.title || "";
+      return message.interactive.button_reply?.id || message.interactive.button_reply?.title || "";
     }
 
     if (message.interactive?.type === "list_reply") {
-      return message.interactive.list_reply?.title || "";
+      return message.interactive.list_reply?.id || message.interactive.list_reply?.title || "";
     }
   }
 

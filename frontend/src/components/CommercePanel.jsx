@@ -1,21 +1,17 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Package, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, Package, Pencil, Plus, Printer, RefreshCcw, Trash2 } from "lucide-react";
 import { api, formatDate } from "../lib/api";
-import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from "./ui";
+import { Field, PrimaryButton, SecondaryButton, TextInput } from "./ui";
 
 const emptyProduct = {
   sku: "",
   nameEn: "",
   nameSi: "",
   nameTa: "",
-  descriptionEn: "",
-  descriptionSi: "",
-  descriptionTa: "",
   price: "",
   currency: "LKR",
   stock: "",
   variants: [],
-  imageUrl: "",
   isActive: true,
 };
 
@@ -33,6 +29,22 @@ function Alert({ error, notice }) {
       {error || notice}
     </div>
   );
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function money(value, currency = "LKR") {
+  return `${currency} ${Number(value || 0).toLocaleString("en-LK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function ProductManagement({ companyId }) {
@@ -64,9 +76,6 @@ function ProductManagement({ companyId }) {
       nameEn: product.name?.en || "",
       nameSi: product.name?.si || "",
       nameTa: product.name?.ta || "",
-      descriptionEn: product.description?.en || "",
-      descriptionSi: product.description?.si || "",
-      descriptionTa: product.description?.ta || "",
       price: String(product.price ?? ""),
       currency: product.currency || "LKR",
       stock: product.stock === null || product.stock === undefined ? "" : String(product.stock),
@@ -77,7 +86,6 @@ function ProductManagement({ companyId }) {
         stock: variant.stock === null || variant.stock === undefined ? "" : String(variant.stock),
         isActive: variant.isActive !== false,
       })),
-      imageUrl: product.imageUrl || "",
       isActive: product.isActive !== false,
     });
   }
@@ -89,7 +97,6 @@ function ProductManagement({ companyId }) {
     const payload = {
       sku: form.sku,
       name: { en: form.nameEn, si: form.nameSi, ta: form.nameTa },
-      description: { en: form.descriptionEn, si: form.descriptionSi, ta: form.descriptionTa },
       price: Number(form.price),
       currency: form.currency,
       stock: form.stock === "" ? null : Number(form.stock),
@@ -100,7 +107,6 @@ function ProductManagement({ companyId }) {
         priceAdjustment: Number(variant.priceAdjustment || 0),
         stock: variant.stock === "" ? null : Number(variant.stock),
       })).filter((variant) => variant.name),
-      imageUrl: form.imageUrl,
       isActive: form.isActive,
     };
     setLoading(true);
@@ -179,7 +185,7 @@ function ProductManagement({ companyId }) {
               <div key={index} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
                 <Field label="Option name"><TextInput required value={variant.name} placeholder="Smoke Grey" onChange={(e) => updateVariant(index, "name", e.target.value)} /></Field>
                 <Field label="Option SKU"><TextInput value={variant.sku} placeholder="LHS-KTL-17-GRY" onChange={(e) => updateVariant(index, "sku", e.target.value)} /></Field>
-                <Field label="Price adjustment"><TextInput type="number" step="0.01" value={variant.priceAdjustment} onChange={(e) => updateVariant(index, "priceAdjustment", e.target.value)} /></Field>
+                <Field label="Additional amount (+/-)"><TextInput type="number" step="0.01" placeholder="0 for same price, 900 to add LKR 900" value={variant.priceAdjustment} onChange={(e) => updateVariant(index, "priceAdjustment", e.target.value)} /></Field>
                 <Field label="Stock (blank = unlimited)"><TextInput type="number" min="0" value={variant.stock} onChange={(e) => updateVariant(index, "stock", e.target.value)} /></Field>
                 <div className="flex items-center justify-between gap-3 sm:col-span-2">
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={variant.isActive} onChange={(e) => updateVariant(index, "isActive", e.target.checked)} /> Available</label>
@@ -190,10 +196,6 @@ function ProductManagement({ companyId }) {
             {!form.variants.length && <div className="rounded-lg border border-dashed border-slate-300 px-3 py-5 text-center text-xs text-slate-500">No options. The base product will be ordered directly.</div>}
           </div>
         </div>
-        <Field label="English description"><TextArea value={form.descriptionEn} onChange={(e) => setForm({ ...form, descriptionEn: e.target.value })} /></Field>
-        <Field label="Sinhala description"><TextArea value={form.descriptionSi} onChange={(e) => setForm({ ...form, descriptionSi: e.target.value })} /></Field>
-        <Field label="Tamil description"><TextArea value={form.descriptionTa} onChange={(e) => setForm({ ...form, descriptionTa: e.target.value })} /></Field>
-        <Field label="Product image URL"><TextInput type="url" placeholder="https://example.com/product.jpg" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} /></Field>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Available for ordering</label>
         <div className="flex gap-2">
           <PrimaryButton type="submit" disabled={loading}>{editingId ? "Save changes" : "Add product"}</PrimaryButton>
@@ -210,11 +212,7 @@ function ProductManagement({ companyId }) {
           {products.map((product) => (
             <div key={product._id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                {product.imageUrl ? (
-                  <img src={product.imageUrl} alt="" className="h-12 w-12 rounded-xl border border-slate-200 object-cover" />
-                ) : (
-                  <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><Package size={20} /></div>
-                )}
+                <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><Package size={20} /></div>
                 <div>
                   <div className="font-semibold">{product.name?.en || product.name?.si || product.name?.ta}</div>
                   <div className="text-sm text-slate-500">{product.sku} · {product.currency} {Number(product.price).toFixed(2)} · Stock {product.stock ?? "Unlimited"}</div>
@@ -231,7 +229,7 @@ function ProductManagement({ companyId }) {
   );
 }
 
-function OrderManagement({ companyId }) {
+function OrderManagement({ companyId, companyName }) {
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState(null);
   const [status, setStatus] = useState("");
@@ -267,6 +265,96 @@ function OrderManagement({ companyId }) {
     }
   }
 
+  function printBill(order) {
+    const printWindow = window.open("", "_blank", "width=900,height=760");
+    if (!printWindow) {
+      setError("Your browser blocked the print window. Allow pop-ups for this dashboard and try again.");
+      return;
+    }
+    printWindow.opener = null;
+    const confirmedPrice = order.priceStatus !== "pending";
+    const currency = order.currency || "LKR";
+    const rows = (order.items || []).map((item) => `
+      <tr>
+        <td>
+          <strong>${escapeHtml(item.name)}</strong>
+          ${item.variant ? `<div class="muted">Option: ${escapeHtml(item.variant)}</div>` : ""}
+          ${item.sku ? `<div class="muted">SKU: ${escapeHtml(item.sku)}</div>` : ""}
+        </td>
+        <td class="number">${escapeHtml(item.quantity)}</td>
+        <td class="number">${confirmedPrice ? escapeHtml(money(item.unitPrice, currency)) : "Pending"}</td>
+        <td class="number">${confirmedPrice ? escapeHtml(money(item.lineTotal, currency)) : "Pending"}</td>
+      </tr>
+    `).join("");
+    const totalLabel = confirmedPrice ? money(order.total, currency) : "Seller to confirm";
+    const createdAt = order.createdAt
+      ? new Date(order.createdAt).toLocaleString("en-LK", { dateStyle: "medium", timeStyle: "short" })
+      : "-";
+    printWindow.document.write(`<!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(order.orderNumber)} - Order bill</title>
+          <style>
+            @page { size: A4; margin: 16mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; color: #0f172a; font: 14px/1.5 Arial, sans-serif; }
+            .header { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 2px solid #0f766e; }
+            .brand { color: #0f766e; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+            h1 { margin: 5px 0 0; font-size: 27px; }
+            .bill-title { text-align: right; }
+            .bill-title strong { display: block; font-size: 18px; }
+            .muted { color: #64748b; font-size: 12px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 26px 0; }
+            h2 { margin: 0 0 8px; color: #475569; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+            p { margin: 3px 0; }
+            table { width: 100%; border-collapse: collapse; }
+            th { padding: 10px; background: #f1f5f9; color: #475569; font-size: 11px; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
+            td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+            .number { text-align: right; white-space: nowrap; }
+            .summary { width: 330px; margin: 24px 0 0 auto; }
+            .summary div { display: flex; justify-content: space-between; gap: 20px; padding: 5px 0; }
+            .summary .total { margin-top: 8px; padding-top: 12px; border-top: 2px solid #0f172a; font-size: 18px; font-weight: 700; }
+            .status { display: inline-block; padding: 3px 9px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+            .footer { margin-top: 42px; padding-top: 14px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 11px; text-align: center; }
+            @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <header class="header">
+            <div><div class="brand">${escapeHtml(companyName || "Pentarix AI Assistant")}</div><h1>Order Bill</h1></div>
+            <div class="bill-title"><strong>${escapeHtml(order.orderNumber)}</strong><span class="muted">${escapeHtml(createdAt)}</span></div>
+          </header>
+          <section class="grid">
+            <div>
+              <h2>Bill to</h2>
+              <p><strong>${escapeHtml(order.customer?.name || "-")}</strong></p>
+              <p>${escapeHtml(order.customer?.phone || "No phone number")}</p>
+              <p>${escapeHtml(order.customer?.deliveryAddress || "No delivery address")}</p>
+            </div>
+            <div>
+              <h2>Order details</h2>
+              <p>Payment: <strong>${escapeHtml(order.paymentMethod || "-")}</strong></p>
+              <p>Channel: ${escapeHtml(order.channel || "-")} · ${escapeHtml((order.language || "").toUpperCase())}</p>
+              <p>Status: <span class="status">${escapeHtml(order.status || "new")}</span></p>
+            </div>
+          </section>
+          <table>
+            <thead><tr><th>Item</th><th class="number">Qty</th><th class="number">Unit price</th><th class="number">Amount</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4">No items</td></tr>'}</tbody>
+          </table>
+          <section class="summary">
+            ${confirmedPrice ? `<div><span>Subtotal</span><strong>${escapeHtml(money(order.subtotal, currency))}</strong></div><div><span>Delivery</span><strong>${escapeHtml(money(order.deliveryFee, currency))}</strong></div>` : ""}
+            <div class="total"><span>Total</span><span>${escapeHtml(totalLabel)}</span></div>
+          </section>
+          <footer class="footer">Generated by Pentarix AI Assistant</footer>
+        </body>
+      </html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 250);
+  }
+
   const statuses = ["new", "confirmed", "processing", "shipped", "delivered", "cancelled"];
   return (
     <div className="space-y-5">
@@ -285,7 +373,7 @@ function OrderManagement({ companyId }) {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Items</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Channel</th><th className="px-4 py-3">Status</th></tr></thead>
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Items</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Channel</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Bill</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {orders.map((order) => (
                 <tr key={order._id} className={order.status === "new" ? "bg-amber-50/60" : ""}>
@@ -295,6 +383,7 @@ function OrderManagement({ companyId }) {
                   <td className="px-4 py-4 font-semibold">{order.priceStatus === "pending" ? "Seller to confirm" : `${order.currency} ${Number(order.total).toFixed(2)}`}<div className="text-xs font-normal text-slate-500">{order.paymentMethod}</div></td>
                   <td className="px-4 py-4 capitalize">{order.channel}<div className="text-xs uppercase text-slate-400">{order.language}</div></td>
                   <td className="px-4 py-4"><select className="h-9 rounded-md border border-slate-200 bg-white px-2" value={order.status} onChange={(e) => setOrderStatus(order._id, e.target.value)}>{statuses.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
+                  <td className="px-4 py-4 text-right"><SecondaryButton type="button" onClick={() => printBill(order)}><Printer size={15} /> Print bill</SecondaryButton></td>
                 </tr>
               ))}
             </tbody>
@@ -363,10 +452,10 @@ function MessengerManagement({ companyId }) {
   );
 }
 
-export function CommercePanel({ companyId, section }) {
+export function CommercePanel({ companyId, companyName, section }) {
   if (!companyId) return null;
   if (section === "products") return <ProductManagement companyId={companyId} />;
-  if (section === "orders") return <OrderManagement companyId={companyId} />;
+  if (section === "orders") return <OrderManagement companyId={companyId} companyName={companyName} />;
   if (section === "messenger") return <MessengerManagement companyId={companyId} />;
   return null;
 }

@@ -25,18 +25,12 @@ function payload(body) {
       si: String(body.name?.si || body.nameSi || "").trim(),
       ta: String(body.name?.ta || body.nameTa || "").trim(),
     },
-    description: {
-      en: String(body.description?.en || "").trim(),
-      si: String(body.description?.si || "").trim(),
-      ta: String(body.description?.ta || "").trim(),
-    },
     price: Number(body.price),
     currency: String(body.currency || "LKR").trim().toUpperCase(),
     stock: body.stock === "" || body.stock === null || body.stock === undefined
       ? null
       : Number(body.stock),
     variants,
-    imageUrl: String(body.imageUrl || "").trim(),
     isActive: body.isActive !== false,
   };
 }
@@ -53,9 +47,6 @@ function validate(data) {
   }
   if (data.variants.some((variant) => variant.stock !== null && (!Number.isInteger(variant.stock) || variant.stock < 0))) {
     return "Variant stock must be blank or a non-negative whole number";
-  }
-  if (data.imageUrl && !/^https?:\/\//i.test(data.imageUrl)) {
-    return "Product image must use an http:// or https:// URL";
   }
   return "";
 }
