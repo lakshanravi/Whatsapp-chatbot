@@ -16,16 +16,24 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || "change-this-dev-secret",
   superAdminEmail: process.env.SUPER_ADMIN_EMAIL || "admin@example.com",
   superAdminPassword: process.env.SUPER_ADMIN_PASSWORD || "admin123",
-  graphApiVersion: process.env.GRAPH_API_VERSION || "v20.0",
+  graphApiVersion: process.env.GRAPH_API_VERSION || "v26.0",
+  metaAppId: process.env.META_APP_ID || "",
+  metaAppSecret: process.env.META_APP_SECRET || "",
+  whatsappEmbeddedSignupConfigId:
+    process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || "",
+  messengerLoginConfigId: process.env.MESSENGER_LOGIN_CONFIG_ID || "",
   whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
-  whatsappAppSecret: process.env.WHATSAPP_APP_SECRET || process.env.MESSENGER_APP_SECRET,
+  whatsappAppSecret:
+    process.env.META_APP_SECRET
+    || process.env.WHATSAPP_APP_SECRET
+    || process.env.MESSENGER_APP_SECRET,
   whatsappTokenEncryptionKey: process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
   smsTokenEncryptionKey:
     process.env.SMS_TOKEN_ENCRYPTION_KEY || process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
   messengerTokenEncryptionKey:
     process.env.MESSENGER_TOKEN_ENCRYPTION_KEY || process.env.WHATSAPP_TOKEN_ENCRYPTION_KEY,
   messengerVerifyToken: process.env.MESSENGER_VERIFY_TOKEN,
-  messengerAppSecret: process.env.MESSENGER_APP_SECRET,
+  messengerAppSecret: process.env.META_APP_SECRET || process.env.MESSENGER_APP_SECRET,
   twilioValidateWebhookSignature:
     process.env.TWILIO_VALIDATE_WEBHOOK_SIGNATURE !== "false",
   publicBackendUrl: process.env.PUBLIC_BACKEND_URL || "",

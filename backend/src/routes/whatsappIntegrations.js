@@ -3,6 +3,8 @@ const express = require("express");
 const Company = require("../models/Company");
 const WhatsAppIntegration = require("../models/WhatsAppIntegration");
 const whatsappService = require("../modules/whatsapp/whatsapp.service");
+const config = require("../config");
+const metaOnboarding = require("../services/metaOnboarding");
 
 const router = express.Router({ mergeParams: true });
 
@@ -31,6 +33,82 @@ function getWhatsAppPayload(body) {
     isActive: body.isActive,
   };
 }
+
+function cleanMetaId(value, label) {
+  const id = String(value || "").trim();
+  if (!/^\d{5,30}$/.test(id)) {
+    const error = new Error(`${label} is invalid`);
+    error.status = 400;
+    throw error;
+  }
+  return id;
+}
+
+router.get("/connect-config", async (req, res) => {
+  try {
+    await ensureCompany(req.params.companyId);
+    const enabled = Boolean(
+      config.metaAppId
+      && config.metaAppSecret
+      && config.whatsappEmbeddedSignupConfigId
+    );
+    return res.json({
+      enabled,
+      appId: config.metaAppId || "",
+      configId: config.whatsappEmbeddedSignupConfigId || "",
+      graphApiVersion: metaOnboarding.graphVersion(),
+      reason: enabled
+        ? ""
+        : "Meta Embedded Signup is not configured on the Pentarix server.",
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+router.post("/connect", async (req, res) => {
+  try {
+    await ensureCompany(req.params.companyId);
+    if (!config.whatsappEmbeddedSignupConfigId) {
+      return res.status(503).json({
+        error: "WhatsApp Embedded Signup is not configured on the Pentarix server",
+      });
+    }
+    const wabaId = cleanMetaId(req.body.wabaId, "WhatsApp Business Account ID");
+    const phoneNumberId = cleanMetaId(req.body.phoneNumberId, "WhatsApp phone number ID");
+    const existingPhoneOwner = await WhatsAppIntegration.findOne({
+      phoneNumberId,
+      companyId: { $ne: req.params.companyId },
+    });
+    if (existingPhoneOwner) {
+      return res.status(409).json({ error: "This WhatsApp number is already connected to another company" });
+    }
+
+    const accessToken = await metaOnboarding.exchangeEmbeddedSignupCode(req.body.code);
+    const phone = await metaOnboarding.getWhatsAppPhone({ accessToken, wabaId, phoneNumberId });
+    await metaOnboarding.subscribeWhatsAppBusinessAccount({ accessToken, wabaId });
+
+    let integration = await findIntegration(req.params.companyId, true);
+    const statusCode = integration ? 200 : 201;
+    if (!integration) integration = new WhatsAppIntegration({ companyId: req.params.companyId });
+    integration.phoneNumberId = phoneNumberId;
+    integration.wabaId = wabaId;
+    integration.displayPhoneNumber = String(phone.display_phone_number || "");
+    integration.verifiedName = String(phone.verified_name || "");
+    integration.onboardingMethod = "embedded_signup";
+    integration.isActive = true;
+    integration.setAccessToken(accessToken);
+    await integration.save();
+    return res.status(statusCode).json(integration.toSafeJSON());
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      error: error.message,
+      type: error.meta?.type,
+      code: error.meta?.code,
+      errorSubcode: error.meta?.error_subcode,
+    });
+  }
+});
 
 router.post("/", async (req, res) => {
   try {
@@ -62,6 +140,7 @@ router.post("/", async (req, res) => {
     }
 
     integration.phoneNumberId = String(phoneNumberId).trim();
+    integration.onboardingMethod = "manual";
     integration.isActive = typeof isActive === "boolean" ? isActive : integration.isActive;
     integration.setAccessToken(accessToken);
     await integration.save();
@@ -168,13 +247,25 @@ router.delete("/", async (req, res) => {
   try {
     await ensureCompany(req.params.companyId);
 
-    const integration = await findIntegration(req.params.companyId);
+    const integration = await findIntegration(req.params.companyId, true);
     if (!integration) {
       return res.status(404).json({ error: "WhatsApp integration not found" });
     }
 
+    let warning = "";
+    if (integration.wabaId) {
+      try {
+        await metaOnboarding.unsubscribeWhatsAppBusinessAccount({
+          accessToken: integration.getAccessToken(),
+          wabaId: integration.wabaId,
+        });
+      } catch (error) {
+        warning = "The local connection was removed, but Meta could not confirm webhook unsubscription.";
+        console.warn("WhatsApp webhook unsubscribe failed:", error.message);
+      }
+    }
     await integration.deleteOne();
-    res.json({ message: "WhatsApp integration deleted" });
+    res.json({ message: "WhatsApp integration deleted", warning });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

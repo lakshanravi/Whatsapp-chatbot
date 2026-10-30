@@ -9,8 +9,8 @@ A multi-company RAG (Retrieval-Augmented Generation) customer support system. Ea
 - PDF upload and per-company vector indexing
 - Web chat widget with guest mode, Google login, website-account login, and conversational ordering
 - Persistent chat history for web, WhatsApp, and SMS users
-- WhatsApp Cloud API integration per company
-- Facebook Messenger Page integration per company
+- WhatsApp Embedded Signup for customer-owned business numbers
+- Facebook authorization and Page selection for Messenger
 - SMS chatbot integration through Twilio per company
 - Sinhala, English, and Tamil customer language preferences
 - Structured product catalogues and guided conversational ordering
@@ -157,7 +157,11 @@ Add these values to `backend/.env`.
 | `GOOGLE_CLIENT_IDS` | Google OAuth client ID | Comma-separated Google Client IDs for widget Google login |
 | `OPENAI_API_KEY` | OpenAI key | Used by message preprocessing / query rewriting |
 | `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Model used for query rewrite / intent classification |
-| `GRAPH_API_VERSION` | `v20.0` | Meta Graph API version |
+| `GRAPH_API_VERSION` | `v26.0` | Meta Graph API version |
+| `META_APP_ID` | Meta App ID | Pentarix Meta App used for customer onboarding |
+| `META_APP_SECRET` | Meta App Secret | Exchanges authorization codes and validates channel webhooks |
+| `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` | Meta configuration ID | Opens the official WhatsApp Embedded Signup flow |
+| `MESSENGER_LOGIN_CONFIG_ID` | Meta login configuration ID | Optional Facebook Login for Business configuration |
 | `WHATSAPP_VERIFY_TOKEN` | custom verify token | Used for Meta WhatsApp webhook verification |
 | `WHATSAPP_APP_SECRET` | Meta App Secret | Validates incoming WhatsApp webhook signatures |
 | `WHATSAPP_TOKEN_ENCRYPTION_KEY` | long random secret | Encrypts company WhatsApp access tokens |
@@ -324,7 +328,9 @@ curl -X DELETE http://localhost:3000/api/companies/COMPANY_ID/documents/DOCUMENT
 
 ## WhatsApp integration
 
-Each company can save its own Meta WhatsApp Cloud API credentials. The access token is encrypted before it is stored in MongoDB.
+Each company clicks **Connect with Meta**, signs into its own Meta Business account, and selects or creates its own WhatsApp Business number. Pentarix exchanges the one-time authorization code on the backend, subscribes the selected WABA to the shared webhook, and stores the resulting token encrypted. Manual credential entry remains available only as an advanced fallback.
+
+The one-time platform configuration is documented in [`docs/06-meta-channel-onboarding.md`](docs/06-meta-channel-onboarding.md).
 
 ### Save WhatsApp integration
 
@@ -472,6 +478,8 @@ new -> confirmed -> processing -> shipped -> delivered
 | `POST` | `/widget/companies/:companyId/chat/auth/google` | Widget Google login |
 | `POST` | `/widget/companies/:companyId/chat/auth/external` | Widget website-account login |
 | `POST` | `/api/companies/:id/whatsapp-integration` | Create WhatsApp integration |
+| `GET` | `/api/companies/:id/whatsapp-integration/connect-config` | Load safe Embedded Signup configuration |
+| `POST` | `/api/companies/:id/whatsapp-integration/connect` | Complete WhatsApp Embedded Signup |
 | `GET/PUT/DELETE` | `/api/companies/:id/whatsapp-integration` | Manage WhatsApp integration |
 | `POST` | `/api/companies/:id/whatsapp-integration/validate` | Validate WhatsApp integration |
 | `GET` | `/api/whatsapp/webhook` | Verify Meta WhatsApp webhook |
@@ -484,6 +492,9 @@ new -> confirmed -> processing -> shipped -> delivered
 | `POST` | `/api/sms/status` | Receive Twilio message status callback |
 | `POST` | `/api/sms/send` | Send SMS text message |
 | `GET/POST/PUT/DELETE` | `/api/companies/:id/messenger-integration` | Manage seller Messenger connection |
+| `GET` | `/api/companies/:id/messenger-integration/connect-config` | Load safe Facebook connection configuration |
+| `POST` | `/api/companies/:id/messenger-integration/connect/pages` | Discover authorized Facebook Pages |
+| `POST` | `/api/companies/:id/messenger-integration/connect` | Connect and subscribe the selected Page |
 | `POST` | `/api/companies/:id/messenger-integration/validate` | Validate the connected Facebook Page |
 | `GET/POST/PUT/DELETE` | `/api/companies/:id/products` | Manage the seller product catalogue |
 | `GET` | `/api/companies/:id/orders` | List and filter seller orders |
@@ -533,9 +544,9 @@ new -> confirmed -> processing -> shipped -> delivered
 7. Test normal admin chat.
 8. Generate widget API key and test guest web history.
 9. Test Google login and website-account login if configured.
-10. Save and validate WhatsApp integration.
+10. Connect and validate a customer-owned WhatsApp number through Meta Embedded Signup.
 11. Save and validate SMS integration.
-12. Configure public webhook URLs in Meta and Twilio.
+12. Connect a customer-owned Facebook Page and configure public platform webhook URLs in Meta and Twilio.
 
 For repeatable PDF-answer checks, edit `rag-service/evals/qa_regression.json` and run:
 

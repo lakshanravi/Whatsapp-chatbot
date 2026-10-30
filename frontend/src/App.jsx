@@ -52,6 +52,7 @@ import {
 } from "./constants/forms";
 import { api, formatDate, getAuthToken, setAuthToken } from "./lib/api";
 import { createRealtimeVoice } from "./lib/realtimeVoice";
+import { loadMetaSdk, startWhatsAppEmbeddedSignup } from "./lib/metaSdk";
 import { classNames } from "./utils/classNames";
 
 function InlineFormat({ text }) {
@@ -187,6 +188,7 @@ export default function App() {
     { role: "assistant", content: "Hi, how can I help?" },
   ]);
   const [whatsappIntegration, setWhatsappIntegration] = useState(null);
+  const [whatsappConnectConfig, setWhatsappConnectConfig] = useState(null);
   const [whatsappForm, setWhatsappForm] = useState(emptyWhatsAppForm);
   const [whatsappValidation, setWhatsappValidation] = useState(null);
   const [smsIntegration, setSmsIntegration] = useState(null);
@@ -347,12 +349,21 @@ export default function App() {
       setWhatsappIntegration(null);
       setWhatsappForm(emptyWhatsAppForm);
       setWhatsappValidation(null);
+      setWhatsappConnectConfig(null);
       return;
     }
 
     setLoading((current) => ({ ...current, whatsapp: true }));
     setWhatsappValidation(null);
     try {
+      const connectConfig = await api.whatsappIntegration.connectConfig(companyId);
+      setWhatsappConnectConfig(connectConfig);
+      if (connectConfig.enabled) {
+        loadMetaSdk({
+          appId: connectConfig.appId,
+          graphApiVersion: connectConfig.graphApiVersion,
+        }).catch(() => {});
+      }
       const result = await api.whatsappIntegration.get(companyId);
       const integration = Array.isArray(result) ? null : result;
       setWhatsappIntegration(integration);
@@ -942,6 +953,39 @@ ${widgetScriptSrc()}`;
         isActive: result.isActive !== false,
       });
       setWhatsappValidation(null);
+    }
+  }
+
+  async function handleConnectWhatsApp() {
+    if (!selectedCompany) return;
+    setLoading((current) => ({ ...current, whatsapp: true }));
+    setError("");
+    setNotice("");
+    try {
+      const connectConfig = whatsappConnectConfig
+        || await api.whatsappIntegration.connectConfig(selectedCompany._id);
+      setWhatsappConnectConfig(connectConfig);
+      if (!connectConfig.enabled) {
+        throw new Error(connectConfig.reason || "WhatsApp connection is not configured");
+      }
+      const signup = await startWhatsAppEmbeddedSignup({
+        appId: connectConfig.appId,
+        configId: connectConfig.configId,
+        graphApiVersion: connectConfig.graphApiVersion,
+      });
+      const result = await api.whatsappIntegration.connect(selectedCompany._id, signup);
+      setWhatsappIntegration(result);
+      setWhatsappForm({
+        phoneNumberId: result.phoneNumberId || "",
+        accessToken: "",
+        isActive: result.isActive !== false,
+      });
+      setWhatsappValidation(null);
+      setNotice(`WhatsApp connected${result.displayPhoneNumber ? `: ${result.displayPhoneNumber}` : ""}`);
+    } catch (err) {
+      setError(err.technicalMessage || err.message || "WhatsApp connection failed");
+    } finally {
+      setLoading((current) => ({ ...current, whatsapp: false }));
     }
   }
 
@@ -2330,7 +2374,38 @@ ${widgetScriptSrc()}`;
                     </div>
                   </div>
                   <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <form className="space-y-4" onSubmit={handleSaveWhatsAppIntegration}>
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h3 className="font-semibold text-emerald-950">
+                              {whatsappIntegration ? "Reconnect WhatsApp" : "Connect your WhatsApp number"}
+                            </h3>
+                            <p className="mt-1 max-w-xl text-sm leading-6 text-emerald-800">
+                              Sign in securely with Meta, choose your business and verify your own phone number. Pentarix never receives your Meta password.
+                            </p>
+                          </div>
+                          <PrimaryButton
+                            onClick={handleConnectWhatsApp}
+                            disabled={loading.whatsapp || whatsappConnectConfig?.enabled === false}
+                            className="shrink-0"
+                          >
+                            {loading.whatsapp ? <Loader2 className="animate-spin" size={16} /> : <MessageSquare size={16} />}
+                            {whatsappIntegration ? "Reconnect with Meta" : "Connect with Meta"}
+                          </PrimaryButton>
+                        </div>
+                        {whatsappConnectConfig?.enabled === false && (
+                          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            {whatsappConnectConfig.reason}
+                          </p>
+                        )}
+                      </div>
+
+                      <details className="rounded-xl border border-slate-200 bg-white">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
+                          Advanced manual connection
+                        </summary>
+                        <form className="space-y-4 border-t border-slate-200 p-4" onSubmit={handleSaveWhatsAppIntegration}>
                       <div className="grid gap-4 md:grid-cols-2">
                         <Field label="WhatsApp phone number ID">
                           <TextInput
@@ -2397,7 +2472,9 @@ ${widgetScriptSrc()}`;
                           Reset
                         </SecondaryButton>
                       </div>
-                    </form>
+                        </form>
+                      </details>
+                    </div>
 
                     <aside className="space-y-3">
                       <div className="p-4 border rounded border-slate-200 bg-slate-50">
@@ -2411,6 +2488,14 @@ ${widgetScriptSrc()}`;
                               {whatsappIntegration?.phoneNumberId || "Not configured"}
                             </dd>
                           </div>
+                          {whatsappIntegration?.displayPhoneNumber && (
+                            <div>
+                              <dt className="text-xs font-semibold tracking-wide uppercase text-slate-500">
+                                Business number
+                              </dt>
+                              <dd className="mt-1 text-slate-800">{whatsappIntegration.displayPhoneNumber}</dd>
+                            </div>
+                          )}
                           <div>
                             <dt className="text-xs font-semibold tracking-wide uppercase text-slate-500">
                               Token preview

@@ -3,7 +3,11 @@ function mapIncomingWebhook(payload) {
   for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
     for (const event of Array.isArray(entry?.messaging) ? entry.messaging : []) {
       if (event.message?.is_echo) continue;
-      const text = event.message?.text || event.postback?.title || event.postback?.payload || "";
+      const text = event.message?.quick_reply?.payload
+        || event.message?.text
+        || event.postback?.payload
+        || event.postback?.title
+        || "";
       if (!text) continue;
       messages.push({
         pageId: String(entry.id || event.recipient?.id || ""),

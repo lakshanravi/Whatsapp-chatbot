@@ -159,12 +159,13 @@ test("maps Messenger text and postback events and ignores echoes", () => {
       messaging: [
         { sender: { id: "customer-1" }, message: { mid: "m1", text: "English" } },
         { sender: { id: "customer-1" }, postback: { mid: "m2", payload: "order", title: "Order" } },
+        { sender: { id: "customer-1" }, message: { mid: "m4", text: "Truncated title", quick_reply: { payload: "QuickBoil Glass Kettle" } } },
         { sender: { id: "page-1" }, message: { mid: "m3", text: "echo", is_echo: true } },
       ],
     }],
   });
-  assert.equal(result.length, 2);
-  assert.deepEqual(result.map((item) => item.text), ["English", "Order"]);
+  assert.equal(result.length, 3);
+  assert.deepEqual(result.map((item) => item.text), ["English", "order", "QuickBoil Glass Kettle"]);
   assert.equal(result[0].pageId, "page-1");
   assert.equal(result[0].senderId, "customer-1");
 });

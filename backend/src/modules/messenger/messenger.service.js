@@ -23,7 +23,7 @@ async function sendText({ recipientId, text, integration, suggestions = [] }) {
           quick_replies: suggestions.slice(0, 13).map((suggestion, index) => ({
             content_type: "text",
             title: String(suggestion.label).slice(0, 20),
-            payload: `choice_${index + 1}`,
+            payload: String(suggestion.message || suggestion.label || `choice_${index + 1}`).slice(0, 1000),
           })),
         } : {}),
       },

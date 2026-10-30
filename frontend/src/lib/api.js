@@ -217,6 +217,14 @@ export const api = {
   },
   whatsappIntegration: {
     get: (companyId) => request(`/api/companies/${companyId}/whatsapp-integration`),
+    connectConfig: (companyId) =>
+      request(`/api/companies/${companyId}/whatsapp-integration/connect-config`),
+    connect: (companyId, payload) =>
+      request(`/api/companies/${companyId}/whatsapp-integration/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
     save: (companyId, payload, hasExisting) =>
       request(`/api/companies/${companyId}/whatsapp-integration`, {
         method: hasExisting ? "PUT" : "POST",
@@ -252,6 +260,20 @@ export const api = {
   },
   messengerIntegration: {
     get: (companyId) => request(`/api/companies/${companyId}/messenger-integration`),
+    connectConfig: (companyId) =>
+      request(`/api/companies/${companyId}/messenger-integration/connect-config`),
+    discoverPages: (companyId, accessToken) =>
+      request(`/api/companies/${companyId}/messenger-integration/connect/pages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken }),
+      }),
+    connectPage: (companyId, payload) =>
+      request(`/api/companies/${companyId}/messenger-integration/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
     save: (companyId, payload, hasExisting) =>
       request(`/api/companies/${companyId}/messenger-integration`, {
         method: hasExisting ? "PUT" : "POST",

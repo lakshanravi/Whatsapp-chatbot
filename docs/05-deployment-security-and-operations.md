@@ -43,6 +43,10 @@ Each environment should have separate:
 | `OPENAI_API_KEY` | Used for backend query rewrite/classification |
 | `OPENAI_CHAT_MODEL` | Backend chat model for preprocessing |
 | `GRAPH_API_VERSION` | Meta Graph API version |
+| `META_APP_ID` | Pentarix Meta App ID used for customer authorization |
+| `META_APP_SECRET` | Pentarix Meta App Secret used only on the backend |
+| `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` | WhatsApp Embedded Signup configuration |
+| `MESSENGER_LOGIN_CONFIG_ID` | Optional Facebook Login for Business configuration |
 | `WHATSAPP_VERIFY_TOKEN` | Meta webhook verification token |
 | `WHATSAPP_TOKEN_ENCRYPTION_KEY` | Encrypts WhatsApp tokens |
 | `SMS_TOKEN_ENCRYPTION_KEY` | Encrypts Twilio auth tokens |
@@ -151,8 +155,16 @@ The backend should reject ID tokens from unknown audiences.
 For WhatsApp:
 
 - Use a strong `WHATSAPP_VERIFY_TOKEN`.
+- Keep the Meta App Secret on the backend only.
+- Use Embedded Signup so customers never paste access tokens into ordinary setup screens.
 - Store company access tokens encrypted.
 - Match inbound messages by `phone_number_id`.
+
+For Messenger:
+
+- Request only `pages_show_list`, `pages_messaging`, and `pages_manage_metadata`.
+- Encrypt Page access tokens and never return them to the browser.
+- Match inbound messages by Facebook Page ID.
 
 For Twilio:
 

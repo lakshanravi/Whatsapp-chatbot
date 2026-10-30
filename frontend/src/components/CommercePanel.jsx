@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Package, Pencil, Plus, Printer, RefreshCcw, Trash2 } from "lucide-react";
 import { api, formatDate } from "../lib/api";
+import { loadMetaSdk, startMessengerLogin } from "../lib/metaSdk";
 import { Field, PrimaryButton, SecondaryButton, TextInput } from "./ui";
 
 const emptyProduct = {
@@ -398,13 +399,23 @@ function OrderManagement({ companyId, companyName }) {
 function MessengerManagement({ companyId }) {
   const [integration, setIntegration] = useState(null);
   const [form, setForm] = useState(emptyMessenger);
+  const [connectConfig, setConnectConfig] = useState(null);
+  const [availablePages, setAvailablePages] = useState([]);
+  const [connectionId, setConnectionId] = useState("");
+  const [selectedPageId, setSelectedPageId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   async function load() {
     setLoading(true);
+    setError("");
     try {
+      const config = await api.messengerIntegration.connectConfig(companyId);
+      setConnectConfig(config);
+      if (config.enabled) {
+        loadMetaSdk({ appId: config.appId, graphApiVersion: config.graphApiVersion }).catch(() => {});
+      }
       const value = await api.messengerIntegration.get(companyId);
       setIntegration(value);
       setForm({ pageId: value.pageId || "", pageName: value.pageName || "", pageAccessToken: "", isActive: value.isActive !== false });
@@ -430,23 +441,113 @@ function MessengerManagement({ companyId }) {
     catch (err) { setError(err.message); } finally { setLoading(false); }
   }
 
+  async function startConnection() {
+    setLoading(true); setError(""); setNotice(""); setAvailablePages([]); setConnectionId("");
+    try {
+      const config = connectConfig || await api.messengerIntegration.connectConfig(companyId);
+      setConnectConfig(config);
+      if (!config.enabled) throw new Error(config.reason || "Messenger connection is not configured");
+      const accessToken = await startMessengerLogin({
+        appId: config.appId,
+        configId: config.configId,
+        graphApiVersion: config.graphApiVersion,
+        permissions: config.permissions,
+      });
+      const result = await api.messengerIntegration.discoverPages(companyId, accessToken);
+      setAvailablePages(result.pages || []);
+      setConnectionId(result.connectionId);
+      setSelectedPageId(result.pages?.[0]?.id || "");
+      if (result.pages?.length === 1) {
+        const connected = await api.messengerIntegration.connectPage(companyId, {
+          connectionId: result.connectionId,
+          pageId: result.pages[0].id,
+        });
+        setIntegration(connected);
+        setForm({ pageId: connected.pageId, pageName: connected.pageName || "", pageAccessToken: "", isActive: true });
+        setAvailablePages([]); setConnectionId("");
+        setNotice(`Messenger connected to ${connected.pageName || connected.pageId}`);
+      } else {
+        setNotice("Choose the Facebook Page that Pentarix should automate.");
+      }
+    } catch (err) {
+      setError(err.technicalMessage || err.message);
+    } finally { setLoading(false); }
+  }
+
+  async function finishConnection() {
+    if (!connectionId || !selectedPageId) return;
+    setLoading(true); setError(""); setNotice("");
+    try {
+      const connected = await api.messengerIntegration.connectPage(companyId, {
+        connectionId,
+        pageId: selectedPageId,
+      });
+      setIntegration(connected);
+      setForm({ pageId: connected.pageId, pageName: connected.pageName || "", pageAccessToken: "", isActive: true });
+      setAvailablePages([]); setConnectionId(""); setSelectedPageId("");
+      setNotice(`Messenger connected to ${connected.pageName || connected.pageId}`);
+    } catch (err) { setError(err.technicalMessage || err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function disconnect() {
+    if (!integration || !window.confirm("Disconnect this Facebook Page from Pentarix?")) return;
+    setLoading(true); setError(""); setNotice("");
+    try {
+      await api.messengerIntegration.remove(companyId);
+      setIntegration(null); setForm(emptyMessenger);
+      setNotice("Messenger disconnected");
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,620px)_1fr]">
-      <form onSubmit={save} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div><h2 className="text-lg font-bold">Facebook Messenger</h2><p className="mt-1 text-sm text-slate-500">Connect one Facebook Page to receive support questions and conversational orders.</p></div>
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div><h2 className="text-lg font-bold">Facebook Messenger</h2><p className="mt-1 text-sm text-slate-500">Authorize Pentarix and choose the Facebook Page your company owns.</p></div>
         <Alert error={error} notice={notice} />
-        <Field label="Facebook Page ID"><TextInput required value={form.pageId} onChange={(e) => setForm({ ...form, pageId: e.target.value })} /></Field>
-        <Field label="Page name"><TextInput value={form.pageName} onChange={(e) => setForm({ ...form, pageName: e.target.value })} /></Field>
-        <Field label={integration ? "New Page access token (leave blank to keep current)" : "Page access token"}><TextInput required={!integration} type="password" value={form.pageAccessToken} onChange={(e) => setForm({ ...form, pageAccessToken: e.target.value })} /></Field>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Integration active</label>
-        <div className="flex gap-2"><PrimaryButton type="submit" disabled={loading}>{integration ? "Update connection" : "Connect Page"}</PrimaryButton>{integration && <SecondaryButton onClick={validate} disabled={loading}><CheckCircle2 size={16} /> Validate</SecondaryButton>}</div>
-      </form>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm leading-6 text-blue-900">Sign in with Facebook and approve the Pages you manage. Your Facebook password is entered only in Meta's window.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <PrimaryButton onClick={startConnection} disabled={loading || connectConfig?.enabled === false}>
+              {integration ? "Reconnect with Facebook" : "Connect with Facebook"}
+            </PrimaryButton>
+            {integration && <SecondaryButton onClick={validate} disabled={loading}><CheckCircle2 size={16} /> Validate</SecondaryButton>}
+            {integration && <SecondaryButton onClick={disconnect} disabled={loading} className="text-rose-700"><Trash2 size={16} /> Disconnect</SecondaryButton>}
+          </div>
+          {connectConfig?.enabled === false && <p className="mt-3 text-xs text-amber-800">{connectConfig.reason}</p>}
+        </div>
+
+        {availablePages.length > 1 && (
+          <div className="rounded-xl border border-slate-200 p-4">
+            <Field label="Choose Facebook Page">
+              <select className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm" value={selectedPageId} onChange={(event) => setSelectedPageId(event.target.value)}>
+                {availablePages.map((page) => <option key={page.id} value={page.id}>{page.name}</option>)}
+              </select>
+            </Field>
+            <PrimaryButton className="mt-3" onClick={finishConnection} disabled={loading || !selectedPageId}>Connect selected Page</PrimaryButton>
+          </div>
+        )}
+
+        <details className="rounded-xl border border-slate-200">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">Advanced manual connection</summary>
+          <form onSubmit={save} className="space-y-4 border-t border-slate-200 p-4">
+            <Field label="Facebook Page ID"><TextInput required value={form.pageId} onChange={(e) => setForm({ ...form, pageId: e.target.value })} /></Field>
+            <Field label="Page name"><TextInput value={form.pageName} onChange={(e) => setForm({ ...form, pageName: e.target.value })} /></Field>
+            <Field label={integration ? "New Page access token (leave blank to keep current)" : "Page access token"}><TextInput required={!integration} type="password" value={form.pageAccessToken} onChange={(e) => setForm({ ...form, pageAccessToken: e.target.value })} /></Field>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Integration active</label>
+            <PrimaryButton type="submit" disabled={loading}>{integration ? "Update manual connection" : "Save manual connection"}</PrimaryButton>
+          </form>
+        </details>
+      </section>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="font-bold">Meta webhook configuration</h2>
-        <p className="mt-2 text-sm text-slate-600">Configure this callback in your Meta app and subscribe to the Page <code>messages</code> and <code>messaging_postbacks</code> fields.</p>
+        <h2 className="font-bold">Connection status</h2>
+        <p className="mt-2 text-sm text-slate-600">The Pentarix Meta App handles the webhook. Each company only authorizes the Facebook Page it owns.</p>
         <div className="mt-4 rounded-md bg-slate-950 p-3 font-mono text-xs text-white">{api.baseUrl}/api/messenger/webhook</div>
-        <p className="mt-3 text-sm text-slate-500">The verify token and Meta App Secret are configured on the backend server. Page tokens are encrypted before storage.</p>
-        {integration && <div className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><div className="font-semibold">Connected</div><div>Page: {integration.pageName || integration.pageId}</div><div>Token ending: {integration.pageAccessTokenLast4 || "-"}</div></div>}
+        <p className="mt-3 text-sm text-slate-500">Page tokens are encrypted before storage and never displayed again.</p>
+        {integration
+          ? <div className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><div className="font-semibold">Connected</div><div>Page: {integration.pageName || integration.pageId}</div><div>Method: {integration.onboardingMethod === "facebook_login" ? "Facebook authorization" : "Manual"}</div><div>Token ending: {integration.pageAccessTokenLast4 || "-"}</div></div>
+          : <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No Facebook Page connected yet.</div>}
       </section>
     </div>
   );
